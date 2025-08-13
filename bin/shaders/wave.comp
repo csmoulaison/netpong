@@ -1,0 +1,34 @@
+#version 430 core
+
+layout (local_size_x = 4, local_size_y = 4, local_size_z = 4) in;
+
+layout(std430, binding = 0) buffer in_color_buffer
+{
+	float colors[];
+} color_buffer;
+
+layout(std140, binding = 1) uniform in_ubo
+{
+	float time;
+	vec4 camera_position;
+	float scale;
+	float constant;
+	float multiplier;
+} ubo;
+
+void main()
+{
+	ivec3 invocation = ivec3(gl_GlobalInvocationID.xyz);
+	int buffer_index = invocation.z * 256 + invocation.y * 16 + invocation.x;
+
+	float scale = ubo.scale * 0.1f;
+	float posx = scale * (ubo.camera_position.x + gl_GlobalInvocationID.x);
+	float posy = scale * (ubo.camera_position.y + gl_GlobalInvocationID.y);
+	float posz = scale * (ubo.camera_position.z + gl_GlobalInvocationID.z);
+	float posw = scale * (ubo.camera_position.w);
+
+	float sines = sin(posx) + sin(posy) + sin(posz) + sin(posw);
+	sines = sines;
+	float result = (sines * sines) * ubo.multiplier + ubo.constant;
+	color_buffer.colors[buffer_index] = clamp(result, 0.0f, result);
+}
