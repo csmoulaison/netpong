@@ -12,9 +12,11 @@ typedef struct {
 } RendererInitSettings;
 
 typedef struct {
+	u32 window_width;
+	u32 window_height;
 } RenderList;
 
 Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena);
-void renderer_update(Renderer* renderer, RenderList* render_list, Arena* arena);
+void renderer_update(Renderer* renderer, RenderList* render_list, Platform* platform, Arena* arena);
 
 #endif

@@ -5,8 +5,6 @@
 typedef struct {
 	Display* display;
 	Window window;
-	uint32_t window_width;
-	uint32_t window_height;
 	uint32_t mouse_moved_yet;
 	uint32_t mouse_just_warped;
 	int32_t stored_cursor_x;
@@ -19,62 +17,88 @@ typedef struct {
 Platform* platform_init(PlatformInitSettings* settings, Arena* arena) 
 {
 	Platform* platform = (Platform*)arena_alloc(arena, sizeof(Platform));
-	platform->backend = arena_alloc(arena, sizeof(Xlib));
+	Xlib* xlib = arena_alloc(arena, sizeof(Xlib));
 
-	Xlib* xlib = (Xlib*)&platform->backend;
 
 	xlib->display = XOpenDisplay(0);
-	if(xlib->display == NULL) 
-	{
+	if(xlib->display == NULL) {
 		panic();
 	}
 
-	GlxInitInfo glx_info = glx_init(xlib);
+	platform->backend = xlib;
+
+	GlxInitInfo glx_info = glx_init_pre_window(xlib);
 
 	Window root_window = RootWindow(xlib->display, glx_info.visual_info->screen);
-	XSetWindowAttributes set_window_attributes =
-	{
+	XSetWindowAttributes set_window_attributes = {
 		.colormap = XCreateColormap(xlib->display, root_window, glx_info.visual_info->visual, AllocNone),
 		.background_pixmap = None,
 		.border_pixel = 0,
 		.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask
 	};
 
-	xlib->window_width = 100;
-	xlib->window_height = 100;
-	xlib->window = XCreateWindow(xlib->display, root_window, 0, 0, xlib->window_width, xlib->window_height, 0, glx_info.visual_info->depth, InputOutput, glx_info.visual_info->visual, CWBorderPixel | CWColormap | CWEventMask, &set_window_attributes);
-	if(xlib->window == 0) 
-	{
+	platform->window_width = 100;
+	platform->window_height = 100;
+	xlib->window = XCreateWindow(xlib->display, root_window, 0, 0, platform->window_width, platform->window_height, 0, glx_info.visual_info->depth, InputOutput, glx_info.visual_info->visual, CWBorderPixel | CWColormap | CWEventMask, &set_window_attributes);
+	if(xlib->window == 0) {
 		panic();
 	}
 
 	XFree(glx_info.visual_info);
-	XStoreName(xlib->display, xlib->window, "fourdee");
+	XStoreName(xlib->display, xlib->window, "2d_proto");
 	XMapWindow(xlib->display, xlib->window);
 
-	XWindowAttributes window_attributes;
-	XGetWindowAttributes(xlib->display, xlib->window, &window_attributes);
-	xlib->window_width = window_attributes.width;
-	xlib->window_height = window_attributes.height;
-	glViewport(0, 0, xlib->window_width, xlib->window_height);
+	glx_init_post_window(xlib, glx_info.framebuffer_config);
+
+	platform->viewport_update_requested = true;
+	platform->backend = xlib;
 
 	return platform;
 }
 
+void platform_init_post_graphics(Platform* platform)
+{
+	Xlib* xlib = (Xlib*)platform->backend;
+
+	XWindowAttributes window_attributes;
+	XGetWindowAttributes(xlib->display, xlib->window, &window_attributes);
+	platform->window_width = window_attributes.width;
+	platform->window_height = window_attributes.height;
+}
+
 void platform_update(Platform* platform, Arena* arena) 
 {
-	Xlib* xlib = (Xlib*)&platform->backend;
-	while(XPending(xlib->display))
-	{
+	Xlib* xlib = (Xlib*)platform->backend;
+	while(XPending(xlib->display)) {
 		XEvent event;
 		XNextEvent(xlib->display,  &event);
-		switch(event.type)
-		{
+		switch(event.type) {
 			case Expose: 
 				break;
-			default: 
+			case ConfigureNotify:
+				XWindowAttributes win_attribs;
+				XGetWindowAttributes(xlib->display, xlib->window, &win_attribs);
+				platform->window_width = win_attribs.width;
+				platform->window_height = win_attribs.height;
+				platform->viewport_update_requested = true;
 				break;
+			case MotionNotify: 
+				break;
+			case ButtonPress:
+				break;
+			case ButtonRelease:
+				break;
+			case KeyPress:
+				break;
+			case KeyRelease:
+				break;
+			default: break;
 		}
 	}
 }
 
+void platform_swap_buffers(Platform* platform)
+{
+	Xlib* xlib = (Xlib*)platform->backend;
+	glXSwapBuffers(xlib->display, xlib->window);
+}

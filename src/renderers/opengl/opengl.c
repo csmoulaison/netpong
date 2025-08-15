@@ -2,7 +2,8 @@
 
 #include "GL/gl3w.h"
 
-#define STB_IMPLEMENTATION
+#define STB_IMAGE_IMPLEMENTATION
+#define STBI_ONLY_BMP
 #include "stb/stb_image.h"
 
 #define TEXT_MAX_CHARS 4096
@@ -45,7 +46,10 @@ u32 gl_compile_shader(char* filename, GLenum type)
 {
 	// Read file
 	FILE* file = fopen(filename, "r");
-	if(file == NULL) panic();
+	if(file == NULL) 
+	{
+		panic();
+	}
 	
 	fseek(file, 0, SEEK_END);
 	uint32_t fsize = ftell(file);
@@ -110,8 +114,11 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	Renderer* renderer = (Renderer*)arena_alloc(arena, sizeof(Renderer));
 	renderer->backend = arena_alloc(arena, sizeof(GlBackend));
 	GlBackend* gl = (GlBackend*)renderer->backend;
-	
-	if(gl3wInit() != 0) panic();
+
+	if(gl3wInit() != 0)
+	{
+		panic();
+	}
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
@@ -168,143 +175,82 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	// UBOs
 	gl->box_ubo = gl_create_ubo(sizeof(BoxUbo), NULL);
 	gl->text_ubo = gl_create_ubo(sizeof(TextUbo), NULL);
+
+	glViewport(0, 0, platform->window_width, platform->window_height);
+
+	return renderer;
 }
 
-void renderer_update(Renderer* renderer, RenderList* render_list, Arena* arena)
+void renderer_update(Renderer* renderer, RenderList* render_list, Platform* platform, Arena* arena)
 {
-	/* NOW - from old project, integrate.
+	GlBackend* gl = (GlBackend*)renderer->backend;
+
+	if(platform->viewport_update_requested)
+	{
+		glViewport(0, 0, platform->window_width, platform->window_height);
+		platform->viewport_update_requested = false;
+	}
+	
 	// Gl render
-	glClearColor(0.84, 0.84, 0.84, 1);
+	glClearColor(0.84f, 0.0f, 0.84f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Game mode specific settings
-	Mode* mode = &game->modes[game->current_mode];
-	uint32_t mode_program = gl->mode_programs[game->current_mode];
+	// Update box ubo
+	BoxUbo box_ubo;
+	// NOW - update transform
+	box_ubo.transform[0] = 0;
+	box_ubo.transform[1] = 0;
+	box_ubo.transform[2] = 0;
+	box_ubo.transform[3] = 0;
 
-	uint32_t grid_length = mode->grid_length;
-	uint32_t grid_area = grid_length * grid_length;
-	uint32_t grid_volume = grid_length * grid_area;
-
-	// Update buffer
-	ModeUbo mode_ubo;
-	mode_ubo.time = game->time_since_init;
-	memcpy(mode_ubo.data, game->mode_data, sizeof(game->mode_data));
-	
-	glBindBuffer(GL_UNIFORM_BUFFER, gl->mode_data_ubo_buffer);
-	void* p_mode_data_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-	memcpy(p_mode_data_ubo, &mode_ubo, sizeof(ModeUbo));
+	glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
+	void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+	memcpy(p_box_ubo, &box_ubo, sizeof(box_ubo));
 	glUnmapBuffer(GL_UNIFORM_BUFFER);
-
-	// Dispatch compute program
-	glUseProgram(mode_program);
-	uint32_t mode_data_ubo_block_index = glGetUniformBlockIndex(mode_program, "ubo");
-	glBindBufferBase(GL_UNIFORM_BUFFER, 1, gl->mode_data_ubo_buffer);
-	glUniformBlockBinding(mode_program, mode_data_ubo_block_index, 0);
-
-	glDispatchCompute(grid_length / 4, grid_length / 4, grid_length / 4);
-	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
-
-	// Update voxel ubo
-	VoxelUbo voxel_ubo;
-	voxel_ubo.grid_length = grid_length;
-
-	mat4 perspective;
-	glm_perspective(glm_rad(75.0f), window_width / window_height, 0.05f, 100.0f, perspective);
-
-	mat4 view;
-	glm_mat4_identity(view);
-	float cam_target[3] = {0, 0, 0};
-	float up[3] = {0, 1, 0};
-	glm_lookat((float*)&game->cam_position, (float*)&cam_target, (float*)&up, view);
-
-	glm_mat4_mul(perspective, view, voxel_ubo.projection);
-
-	glBindBuffer(GL_UNIFORM_BUFFER, gl->voxel_ubo_buffer);
-	void* p_voxel_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-	memcpy(p_voxel_ubo, &voxel_ubo, sizeof(voxel_ubo));
-	glUnmapBuffer(GL_UNIFORM_BUFFER);
-
-	// Update instance to voxel map ssbo
-	int32_t instance_to_voxel_map[grid_volume];
-	float cam_pos[3];
-	v3_copy(game->cam_position, cam_pos);
-
-	sort_voxels(instance_to_voxel_map, grid_length, grid_area, grid_volume, cam_pos);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->instance_to_voxel_buffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(instance_to_voxel_map), instance_to_voxel_map);
 
 	// Draw grid
-	glUseProgram(gl->voxel_program);
+	glUseProgram(gl->box_program);
 
-	uint32_t voxel_ubo_block_index = glGetUniformBlockIndex(gl->voxel_program, "ubo");
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->voxel_ubo_buffer);
-	glUniformBlockBinding(gl->voxel_program, voxel_ubo_block_index, 0);
+	uint32_t box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
+	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->box_ubo);
+	glUniformBlockBinding(gl->box_program, box_ubo_block_index, 0);
 
-	glBindVertexArray(gl->voxel_vao);
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, grid_volume);
+	glBindVertexArray(gl->quad_vao);
+	// NOW - draw the right instances. Actually, just for loop this for now.
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 1);
 
 	// Update text ubo
 	TextUbo text_ubo;	
-	float text_scale_x = 27.0f / window_width;
-	float text_scale_y = 46.0f / window_height;
-	
-	v2_init(text_ubo.transform_a, text_scale_x,  0);
-	v2_init(text_ubo.transform_b, 0, -text_scale_y);
+	float text_scale_x = 27.0f / render_list->window_width;
+	float text_scale_y = 46.0f / render_list->window_height;
 
-	glBindBuffer(GL_UNIFORM_BUFFER, gl->text_ubo_buffer);
+	// NOW - this is commented out because we don't have v2_init
+	//v2_init(text_ubo.transform_a, text_scale_x,  0);
+	//v2_init(text_ubo.transform_b, 0, -text_scale_y);
+
+	glBindBuffer(GL_UNIFORM_BUFFER, gl->text_ubo);
 	void* p_text_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
 	memcpy(p_text_ubo, &text_ubo, sizeof(text_ubo));
 	glUnmapBuffer(GL_UNIFORM_BUFFER);
 
 	// Update text ssbo buffer
-	// 
 	// TODO - 1. Improve text rendering API, moving some of it to game code.
 	//        2. Reason about where different calculations should be made between
 	//           GPU and host. Probably a lot more here, obviously.
 	//        3. Keep in mind any additional features such as text color and things.
-	//           
-	// Then, we should probably move on to formalizing the way we are keeping track
-	// of level-specific things, and how they will end up in an asset.
-	//
-	// As a part of that, we will want to make the flow between levels and
-	// implement the level selector.
-	Mode* current_mode = &game->modes[game->current_mode];
-	TextChar text_buffer[TEXT_MAX_CHARS];
-
-	char desc_str[128];
-	float text_pos[2];
-
-	sprintf(desc_str, "%s", current_mode->compute_filename);
-	uint32_t text_i = fill_text_buffer(desc_str, text_buffer, v2_init(text_pos, 2.35f, 28.25f), 1.0f, 1.0f);
-
-	char* sub_desc_str = "This is just a small showcase of what our world, nay, our universe, is capable of.";
-	text_i += fill_text_buffer(sub_desc_str, &text_buffer[text_i], v2_init(text_pos, 4, 59), 0.5f, 1.0f);
-
-	char* space_prompt_str = "[Space]";
-	text_i += fill_text_buffer(space_prompt_str, &text_buffer[text_i], v2_init(text_pos, 49.8f, 36.0f), 0.66f, 1.0f - sin(game->time_since_init * 1.0f));
-
-#define DIMLEN 7
-	for(uint8_t i = 0; i < current_mode->visible_dimensions; i++)
-	{
-		char s[128];
-		sprintf(s, "[%i] %.1f", i, game->mode_data[i]);
-		text_i += fill_text_buffer(s, &text_buffer[text_i], v2_init(text_pos, 4, 2.5 + i * 1.5), 0.66f, 1.0f);
-	}
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->text_buffer);
+	TextChar text_buffer[TEXT_MAX_CHARS] = {0};
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->text_buffer_ssbo);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(text_buffer), text_buffer);
 
 	// Draw text
 	glUseProgram(gl->text_program);
 
 	uint32_t text_ubo_block_index = glGetUniformBlockIndex(gl->text_program, "ubo");
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->text_ubo_buffer);
+	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->text_ubo);
 	glUniformBlockBinding(gl->text_program, text_ubo_block_index, 0);
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
-	glBindVertexArray(gl->text_vao);
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, text_i);
-	*/
+	glBindVertexArray(gl->quad_vao); // NOW - redundant, considering we have no other VAOs to bind, yes?
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 0); // NOW - draw correct amount of text quads
 }
