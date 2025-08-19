@@ -2,7 +2,7 @@
 
 #include <X11/extensions/Xfixes.h>
 
-typedef struct {
+struct Xlib {
 	Display* display;
 	Window window;
 	uint32_t mouse_moved_yet;
@@ -10,9 +10,9 @@ typedef struct {
 	int32_t stored_cursor_x;
 	int32_t stored_cursor_y;
 	struct timespec time_previous;
-} Xlib;
+};
 
-#include "glx.c"
+#include "glx.cpp"
 
 Platform* platform_init(PlatformInitSettings* settings, Arena* arena) 
 {
@@ -21,7 +21,7 @@ Platform* platform_init(PlatformInitSettings* settings, Arena* arena)
 
 
 	xlib->display = XOpenDisplay(0);
-	if(xlib->display == NULL) {
+	if(xlib->display == nullptr) {
 		panic();
 	}
 

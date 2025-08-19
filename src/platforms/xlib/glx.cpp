@@ -2,11 +2,11 @@
 
 typedef GLXContext(*glXCreateContextAttribsARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
-typedef struct
+struct GlxInitInfo
 {
 	XVisualInfo* visual_info;
 	GLXFBConfig framebuffer_config;
-} GlxInitInfo;
+};
 
 GlxInitInfo glx_init_pre_window(Xlib* xlib)
 {
@@ -36,7 +36,7 @@ GlxInitInfo glx_init_pre_window(Xlib* xlib)
 
 	int32_t framebuffer_configs_len;
 	GLXFBConfig* framebuffer_configs = glXChooseFBConfig(xlib->display, DefaultScreen(xlib->display), desired_framebuffer_attributes, &framebuffer_configs_len);
-	if(framebuffer_configs == NULL) {
+	if(framebuffer_configs == nullptr) {
 		panic();
 	}
 
@@ -45,7 +45,7 @@ GlxInitInfo glx_init_pre_window(Xlib* xlib)
 	int32_t most_samples = -1;
 	for(int32_t i = 0; i < framebuffer_configs_len; i++) {
 		XVisualInfo* tmp_visual_info = glXGetVisualFromFBConfig(xlib->display, framebuffer_configs[i]);
-		if(tmp_visual_info != NULL) {
+		if(tmp_visual_info != nullptr) {
 			int32_t sample_buffers;
 			int32_t samples;
 			glXGetFBConfigAttrib(xlib->display, framebuffer_configs[i], GLX_SAMPLE_BUFFERS, &sample_buffers);

@@ -3,15 +3,15 @@
 
 #include "base.h"
 
-typedef struct Platform {
+struct Platform {
 	bool viewport_update_requested;
 	u32 window_width;
 	u32 window_height;
 	void* backend;
-} Platform;
+};
 
-typedef struct {
-} PlatformInitSettings;
+struct PlatformInitSettings{
+};
 
 Platform* platform_init(PlatformInitSettings* settings, Arena* arena);
 void platform_init_post_graphics(Platform* platform);

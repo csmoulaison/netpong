@@ -1,8 +1,8 @@
 #include "game.h"
 
-typedef struct Game {
+struct Game {
 
-} Game;
+};
 
 Game* game_init(Arena* arena)
 {

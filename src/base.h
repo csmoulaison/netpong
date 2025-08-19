@@ -25,20 +25,20 @@ typedef int64_t i64;
 typedef float f32;
 typedef double f64;
 
-typedef struct Arena {
+struct Arena {
 	u64 index;
 	u64 size;
 	char* region;
-} Arena;
+};
 
 Arena arena_create(u64 size);
 void* arena_alloc(Arena* arena, u64);
 void arena_destroy(Arena* arena);
 
-typedef struct {
+struct String {
 	char* value;
 	i32 len;
-} String;
+};
 
 String string_create(Arena* arena, char* str, i32 len);
 

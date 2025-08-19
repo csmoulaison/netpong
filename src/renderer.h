@@ -4,17 +4,17 @@
 #include "base.h"
 #include "platform.h"
 
-typedef struct {
+struct Renderer {
 	void* backend;
-} Renderer;
+};
 
-typedef struct {
-} RendererInitSettings;
+struct RendererInitSettings{
+};
 
-typedef struct {
+struct RenderList {
 	u32 window_width;
 	u32 window_height;
-} RenderList;
+};
 
 Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena);
 void renderer_update(Renderer* renderer, RenderList* render_list, Platform* platform, Arena* arena);
