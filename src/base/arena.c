@@ -4,7 +4,7 @@
 Arena arena_create(u64 size)
 {
 	Arena arena;
-	arena.region = malloc(size);
+	arena.region = (char*)malloc(size);
 	arena.index = 0;
 	arena.size = 0;
 	return arena;

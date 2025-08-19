@@ -11,7 +11,7 @@ i32 main(i32 argc, char** argv)
 	Renderer* renderer = renderer_init(NULL, platform, &program_arena); // Must have platform to call into platform function and get needed data.
 	platform_init_post_graphics(platform);
 	Game* game = game_init(&program_arena);
-	RenderList* render_list = arena_alloc(&program_arena, sizeof(RenderList));
+	RenderList* render_list = (RenderList*)arena_alloc(&program_arena, sizeof(RenderList));
 
 	while(game_close_requested(game) != true) {
 		platform_update(platform, &program_arena);

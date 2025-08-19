@@ -6,7 +6,7 @@ typedef struct Game {
 
 Game* game_init(Arena* arena)
 {
-
+	return nullptr;
 }
 
 void game_update(Game* game, Platform* platform, RenderList* render_list, Arena* arena)

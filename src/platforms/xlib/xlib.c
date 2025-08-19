@@ -17,7 +17,7 @@ typedef struct {
 Platform* platform_init(PlatformInitSettings* settings, Arena* arena) 
 {
 	Platform* platform = (Platform*)arena_alloc(arena, sizeof(Platform));
-	Xlib* xlib = arena_alloc(arena, sizeof(Xlib));
+	Xlib* xlib = (Xlib*)arena_alloc(arena, sizeof(Xlib));
 
 
 	xlib->display = XOpenDisplay(0);
@@ -30,12 +30,11 @@ Platform* platform_init(PlatformInitSettings* settings, Arena* arena)
 	GlxInitInfo glx_info = glx_init_pre_window(xlib);
 
 	Window root_window = RootWindow(xlib->display, glx_info.visual_info->screen);
-	XSetWindowAttributes set_window_attributes = {
-		.colormap = XCreateColormap(xlib->display, root_window, glx_info.visual_info->visual, AllocNone),
-		.background_pixmap = None,
-		.border_pixel = 0,
-		.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask
-	};
+	XSetWindowAttributes set_window_attributes = {};
+	set_window_attributes.colormap = XCreateColormap(xlib->display, root_window, glx_info.visual_info->visual, AllocNone);
+	set_window_attributes.background_pixmap = None;
+	set_window_attributes.border_pixel = 0;
+	set_window_attributes.event_mask = StructureNotifyMask | ExposureMask | KeyPressMask | KeyReleaseMask | PointerMotionMask | ButtonPressMask | ButtonReleaseMask;
 
 	platform->window_width = 100;
 	platform->window_height = 100;

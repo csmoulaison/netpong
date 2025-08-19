@@ -77,13 +77,13 @@ void glx_init_post_window(Xlib* xlib, GLXFBConfig framebuffer_config)
 	char* gl_extensions = (char*)glXQueryExtensionsString(xlib->display, DefaultScreen(xlib->display));
 	glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
 
-	char* extension = "GLX_ARB_create_context";
+	const char* extension = "GLX_ARB_create_context";
 	char* start;
 	char* where;
 	char* terminator;
 
 	// Extension names should not have spaces.
-	where = strchr(extension, ' ');
+	where = strchr((char*)extension, ' ');
 	if (where || *extension == '\0') {
 		panic();
 	}

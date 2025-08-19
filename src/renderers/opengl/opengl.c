@@ -42,7 +42,7 @@ typedef struct {
 	u32 font_texture;
 } GlBackend;
 
-u32 gl_compile_shader(char* filename, GLenum type)
+u32 gl_compile_shader(const char* filename, GLenum type)
 {
 	// Read file
 	FILE* file = fopen(filename, "r");
@@ -83,7 +83,7 @@ u32 gl_compile_shader(char* filename, GLenum type)
 	return shader;
 }
 
-u32 gl_create_program(char* vert_src, char* frag_src)
+u32 gl_create_program(const char* vert_src, const char* frag_src)
 {
 	u32 vert_shader = gl_compile_shader(vert_src, GL_VERTEX_SHADER);
 	u32 frag_shader = gl_compile_shader(frag_src, GL_FRAGMENT_SHADER);
@@ -198,10 +198,10 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	// Update box ubo
 	BoxUbo box_ubo;
 	// NOW - update transform
-	box_ubo.transform[0] = 0;
+	box_ubo.transform[0] = 1;
 	box_ubo.transform[1] = 0;
 	box_ubo.transform[2] = 0;
-	box_ubo.transform[3] = 0;
+	box_ubo.transform[3] = 1;
 
 	glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
 	void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
@@ -217,7 +217,7 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 
 	glBindVertexArray(gl->quad_vao);
 	// NOW - draw the right instances. Actually, just for loop this for now.
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 36, 1);
+	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	// Update text ubo
 	TextUbo text_ubo;	
