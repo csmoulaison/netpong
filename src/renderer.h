@@ -1,6 +1,8 @@
 #ifndef renderer_h_INCLUDED
 #define renderer_h_INCLUDED
 
+#define RENDER_LIST_CUBES_MAX 10
+
 #include "base.h"
 #include "platform.h"
 
@@ -12,8 +14,8 @@ struct RendererInitSettings{
 };
 
 struct RenderList {
-	u32 window_width;
-	u32 window_height;
+	float cubes[4][RENDER_LIST_CUBES_MAX];
+	u8 cubes_len;
 };
 
 Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena);

@@ -19,8 +19,8 @@ typedef struct
 
 typedef struct
 {
-	// NOW - v4 type
-	float transform[4];
+	float translation[16];
+	float scale[16];
 } BoxUbo;
 
 typedef struct
@@ -46,13 +46,13 @@ u32 gl_compile_shader(const char* filename, GLenum type)
 {
 	// Read file
 	FILE* file = fopen(filename, "r");
-	if(file == NULL) 
+	if(file == nullptr) 
 	{
 		panic();
 	}
 	
 	fseek(file, 0, SEEK_END);
-	uint32_t fsize = ftell(file);
+	u32 fsize = ftell(file);
 	fseek(file, 0, SEEK_SET);
 	char src[fsize];
 
@@ -75,7 +75,7 @@ u32 gl_compile_shader(const char* filename, GLenum type)
 	char info[512];
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if(success == false) {
-		glGetShaderInfoLog(shader, 512, NULL, info);
+		glGetShaderInfoLog(shader, 512, nullptr, info);
 		printf(info);
 		panic();
 	}
@@ -104,7 +104,7 @@ u32 gl_create_ubo(u64 size, void* data)
 	u32 ubo;
 	glGenBuffers(1, &ubo);
 	glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-	glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_UNIFORM_BUFFER, size, nullptr, GL_DYNAMIC_DRAW);
 	glBindBuffer(GL_UNIFORM_BUFFER, 0);
 	return ubo;
 }
@@ -149,7 +149,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
 
-	// Font atlas texture
+	/* Font atlas texture
 	glGenTextures(1, &gl->font_texture);
 	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -159,7 +159,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 
 	i32 w, h, channels;
 	unsigned char* texture_data = stbi_load("fonts/plex_mono.bmp", &w, &h, &channels, 3);
-	if(texture_data == NULL) {
+	if(texture_data == nullptr) {
 		panic();
 	}
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data);
@@ -169,12 +169,13 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	// Text SSBO
 	glGenBuffers(1, &gl->text_buffer_ssbo);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->text_buffer_ssbo);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TextChar[TEXT_MAX_CHARS]), NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TextChar[TEXT_MAX_CHARS]), nullptr, GL_DYNAMIC_DRAW);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gl->text_buffer_ssbo);
+	*/
 
 	// UBOs
-	gl->box_ubo = gl_create_ubo(sizeof(BoxUbo), NULL);
-	gl->text_ubo = gl_create_ubo(sizeof(TextUbo), NULL);
+	gl->box_ubo = gl_create_ubo(sizeof(BoxUbo), nullptr);
+	//gl->text_ubo = gl_create_ubo(sizeof(TextUbo), nullptr);
 
 	glViewport(0, 0, platform->window_width, platform->window_height);
 
@@ -192,26 +193,53 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	}
 	
 	// Gl render
-	glClearColor(0.84f, 0.0f, 0.84f, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Update box ubo
-	BoxUbo box_ubo;
-	// NOW - update transform
-	box_ubo.transform[0] = 1;
-	box_ubo.transform[1] = 0;
-	box_ubo.transform[2] = 0;
-	box_ubo.transform[3] = 1;
+	float* cube = render_list->cubes[0];
+
+	// NOW - why is thes not working.
+	// some qs: row vs column major ordering.
+	float translation[16] = { 
+		1.0f, 0.0f, 0.0f, cube[0],
+		0.0f, 1.0f, 0.0f, cube[1],
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f
+	};
+
+	float scale[16] = { 
+		((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
+		0.0f, cube[3], 0.0f, 0.0f,
+		0.0f, 0.0f, 1.0f, 0.0f,
+		0.0f, 0.0f, 0.0f, 1.0f
+	};
+
+	BoxUbo box_ubo = {
+		{
+			1.0f, 0.0f, 0.0f, 0.0f,
+			0.0f, 1.0f, 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			cube[0], cube[1], 0.0f, 1.0f
+		},
+		{
+			((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
+			0.0f, cube[3], 0.0f, 0.0f,
+			0.0f, 0.0f, 1.0f, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f
+		}
+	};
+
 
 	glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
 	void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-	memcpy(p_box_ubo, &box_ubo, sizeof(box_ubo));
+	memcpy(p_box_ubo, &box_ubo, sizeof(BoxUbo));
 	glUnmapBuffer(GL_UNIFORM_BUFFER);
 
 	// Draw grid
 	glUseProgram(gl->box_program);
 
-	uint32_t box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
+	u32 box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->box_ubo);
 	glUniformBlockBinding(gl->box_program, box_ubo_block_index, 0);
 
@@ -219,7 +247,7 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	// NOW - draw the right instances. Actually, just for loop this for now.
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
-	// Update text ubo
+	/* Update text ubo
 	TextUbo text_ubo;	
 	float text_scale_x = 27.0f / render_list->window_width;
 	float text_scale_y = 46.0f / render_list->window_height;
@@ -245,7 +273,7 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	// Draw text
 	glUseProgram(gl->text_program);
 
-	uint32_t text_ubo_block_index = glGetUniformBlockIndex(gl->text_program, "ubo");
+	u32 text_ubo_block_index = glGetUniformBlockIndex(gl->text_program, "ubo");
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->text_ubo);
 	glUniformBlockBinding(gl->text_program, text_ubo_block_index, 0);
 
@@ -253,4 +281,5 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
 	glBindVertexArray(gl->quad_vao); // NOW - redundant, considering we have no other VAOs to bind, yes?
 	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 0); // NOW - draw correct amount of text quads
+	*/
 }

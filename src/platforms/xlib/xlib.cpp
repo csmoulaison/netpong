@@ -2,23 +2,29 @@
 
 #include <X11/extensions/Xfixes.h>
 
+#define INPUT_DOWN_BIT     0b00000001
+#define INPUT_PRESSED_BIT  0b00000010
+#define INPUT_RELEASED_BIT 0b00000100
+
 struct Xlib {
 	Display* display;
 	Window window;
-	uint32_t mouse_moved_yet;
-	uint32_t mouse_just_warped;
-	int32_t stored_cursor_x;
-	int32_t stored_cursor_y;
+	u32 mouse_moved_yet;
+	u32 mouse_just_warped;
+	i32 stored_cursor_x;
+	i32 stored_cursor_y;
 	struct timespec time_previous;
+
+	u32 input_buttons_len;
+	u8 input_button_states[MAX_PLATFORM_BUTTONS];
 };
 
 #include "glx.cpp"
 
-Platform* platform_init(PlatformInitSettings* settings, Arena* arena) 
+Platform* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* arena) 
 {
 	Platform* platform = (Platform*)arena_alloc(arena, sizeof(Platform));
 	Xlib* xlib = (Xlib*)arena_alloc(arena, sizeof(Xlib));
-
 
 	xlib->display = XOpenDisplay(0);
 	if(xlib->display == nullptr) {
@@ -52,6 +58,12 @@ Platform* platform_init(PlatformInitSettings* settings, Arena* arena)
 	platform->viewport_update_requested = true;
 	platform->backend = xlib;
 
+	xlib->input_buttons_len = 0;
+	for(u32 i = 0; i < MAX_PLATFORM_BUTTONS; i++)
+	{
+		xlib->input_button_states[i] = 0;
+	}
+
 	return platform;
 }
 
@@ -70,6 +82,7 @@ void platform_update(Platform* platform, Arena* arena)
 	Xlib* xlib = (Xlib*)platform->backend;
 	while(XPending(xlib->display)) {
 		XEvent event;
+		u32 keysym;
 		XNextEvent(xlib->display,  &event);
 		switch(event.type) {
 			case Expose: 
@@ -88,6 +101,12 @@ void platform_update(Platform* platform, Arena* arena)
 			case ButtonRelease:
 				break;
 			case KeyPress:
+				keysym = XLookupKeysym(&(event.xkey), 0);
+				switch(keysym) {
+					case XK_a:
+						break;
+					default: break;
+				}
 				break;
 			case KeyRelease:
 				break;
@@ -100,4 +119,19 @@ void platform_swap_buffers(Platform* platform)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	glXSwapBuffers(xlib->display, xlib->window);
+}
+
+bool platform_button_down(Platform* platform, u32 key_id) {
+	// TODO - implement
+	return false;
+}
+
+bool platform_button_pressed(Platform* platform, u32 key_id) {
+	// TODO - implement
+	return false;
+}
+
+bool platform_button_released(Platform* platform, u32 key_id) {
+	// TODO - implement
+	return false;
 }
