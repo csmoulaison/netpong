@@ -64,7 +64,7 @@ Platform* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* aren
 	platform->viewport_update_requested = true;
 	platform->backend = xlib;
 
-	xlib->input_buttons_len = 0;
+	xlib->input_buttons_len = 1;
 	for(u32 i = 0; i < INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN; i++) {
 		xlib->input_keycode_to_button_lookup[i] = INPUT_KEYCODE_UNREGISTERED;
 	}
@@ -87,6 +87,35 @@ void platform_init_post_graphics(Platform* platform)
     }
 }
 
+u8 xlib_platform_from_x11_key(u32 keycode)
+{
+	switch(keycode) {
+		case XK_w:
+			return PLATFORM_KEY_W;
+		case XK_a:
+			return PLATFORM_KEY_A;
+		case XK_s:
+			return PLATFORM_KEY_S;
+		case XK_d:
+			return PLATFORM_KEY_D;
+		case XK_q:
+			return PLATFORM_KEY_Q;
+		case XK_e:
+			return PLATFORM_KEY_E;
+		case XK_space:
+			return PLATFORM_KEY_SPACE;
+		case XK_Up:
+			return PLATFORM_KEY_UP;
+		case XK_Left:
+			return PLATFORM_KEY_LEFT;
+		case XK_Down:
+			return PLATFORM_KEY_DOWN;
+		case XK_Right:
+			return PLATFORM_KEY_RIGHT;
+		default: return 0;
+	}
+}
+
 void platform_update(Platform* platform, Arena* arena) 
 {
 	Xlib* xlib = (Xlib*)platform->backend;
@@ -97,7 +126,7 @@ void platform_update(Platform* platform, Arena* arena)
 
 	while(XPending(xlib->display)) {
 		XEvent event;
-		u32 keysym;
+		u8 keycode;
 		ButtonHandle btn;
 		u8 set_flags;
 		XEvent next_event;
@@ -120,23 +149,18 @@ void platform_update(Platform* platform, Arena* arena)
 			case ButtonRelease:
 				break;
 			case KeyPress:
-						keysym = XLookupKeysym(&(event.xkey), 0);
-				if(keysym >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
+				keycode = xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
+				if(keycode >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
 					break;
 				}
 
-				btn = xlib->input_keycode_to_button_lookup[keysym];
-				if(btn == INPUT_KEYCODE_UNREGISTERED) {
+				btn = xlib->input_keycode_to_button_lookup[keycode];
+				if(btn == INPUT_KEYCODE_UNREGISTERED || (xlib->input_button_states[btn] & INPUT_DOWN_BIT)) {
 					break;
 				}
 
-				if(xlib->input_button_states[btn] & INPUT_DOWN_BIT) {
-					break;
-				}
-
-				set_flags = INPUT_DOWN_BIT | INPUT_PRESSED_BIT;
-				xlib->input_button_states[btn] = xlib->input_button_states[btn] | set_flags;
-						break;
+				xlib->input_button_states[btn] = xlib->input_button_states[btn] | INPUT_DOWN_BIT | INPUT_PRESSED_BIT;
+				break;
 			case KeyRelease:
 	            if (XPending(xlib->display)) {
 	                XPeekEvent(xlib->display, &next_event);
@@ -146,12 +170,12 @@ void platform_update(Platform* platform, Arena* arena)
 	                }
 	            }
 
-				keysym = XLookupKeysym(&(event.xkey), 0);
-				if(keysym >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
+				keycode = xlib_platform_from_x11_key(XLookupKeysym(&(event.xkey), 0));
+				if(keycode >= INPUT_KEYCODE_TO_BUTTON_LOOKUP_LEN) {
 					break;
 				}
 
-				btn = xlib->input_keycode_to_button_lookup[keysym];
+				btn = xlib->input_keycode_to_button_lookup[keycode];
 				if(btn == INPUT_KEYCODE_UNREGISTERED) {
 					break;
 				}
@@ -164,13 +188,11 @@ void platform_update(Platform* platform, Arena* arena)
 		}
 	}
 
-
-    struct timespec time_cur;
-    if(clock_gettime(CLOCK_REALTIME, &time_cur))
-    {
-		panic();
+	struct timespec time_cur;
+    if(clock_gettime(CLOCK_REALTIME, &time_cur)) {
+	    panic();
     }
-	platform->delta_time = time_cur.tv_sec - xlib->time_previous.tv_sec + (float)time_cur.tv_nsec / 1000000000 - (float)xlib->time_previous.tv_nsec / 1000000000;
+    platform->delta_time = time_cur.tv_sec - xlib->time_previous.tv_sec + (float)time_cur.tv_nsec / 1000000000 - (float)xlib->time_previous.tv_nsec / 1000000000;
     xlib->time_previous = time_cur;
 }
 
@@ -182,38 +204,8 @@ void platform_swap_buffers(Platform* platform)
 
 u32 platform_register_button(Platform* platform, u32 keycode)
 {
-	// NOW - Should convert keycode to Xlib native keycode here to avoid
-	// indirection on all future event polling.
 	Xlib* xlib = (Xlib*)platform->backend;
-
-	u8 xlib_keycode = 0;
-	switch(keycode)
-	{
-		case PLATFORM_KEY_W:
-			xlib_keycode = XK_w;
-			break;
-		case PLATFORM_KEY_A:
-			xlib_keycode = XK_a;
-			break;
-		case PLATFORM_KEY_S:
-			xlib_keycode = XK_s;
-			break;
-		case PLATFORM_KEY_D:
-			xlib_keycode = XK_d;
-			break;
-		case PLATFORM_KEY_Q:
-			xlib_keycode = XK_q;
-			break;
-		case PLATFORM_KEY_E:
-			xlib_keycode = XK_e;
-			break;
-		case PLATFORM_KEY_SPACE:
-			xlib_keycode = XK_space;
-			break;
-		default: break;
-	}
-	
-	xlib->input_keycode_to_button_lookup[xlib_keycode] = xlib->input_buttons_len;
+	xlib->input_keycode_to_button_lookup[keycode] = xlib->input_buttons_len;
 	xlib->input_buttons_len++;
 	return xlib->input_buttons_len - 1;
 }

@@ -1,6 +1,8 @@
 #include "base.h"
 #include "stdlib.h"
 
+#define ARENA_ALLOCATIONS false
+
 Arena arena_create(u64 size)
 {
 	Arena arena;
@@ -17,7 +19,9 @@ void arena_destroy(Arena* arena)
 
 void* arena_alloc(Arena* arena, u64 size)
 {
+#if ARENA_ALLOCATIONS
 	printf("Arena allocation from %u-%u (%u bytes)\n", arena->index, arena->index + size, size);
+#endif
 	arena->index += size;
 	return &arena->region[arena->index - size];
 }

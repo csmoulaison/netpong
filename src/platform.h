@@ -5,13 +5,18 @@
 
 #define MAX_PLATFORM_BUTTONS 8
 
-#define PLATFORM_KEY_W 0
-#define PLATFORM_KEY_A 1
-#define PLATFORM_KEY_S 2
-#define PLATFORM_KEY_D 3
-#define PLATFORM_KEY_Q 4
-#define PLATFORM_KEY_E 5
-#define PLATFORM_KEY_SPACE 6
+#define PLATFORM_KEY_NONE  0
+#define PLATFORM_KEY_W     1
+#define PLATFORM_KEY_A     2
+#define PLATFORM_KEY_S     3
+#define PLATFORM_KEY_D     4
+#define PLATFORM_KEY_Q     5
+#define PLATFORM_KEY_E     6
+#define PLATFORM_KEY_SPACE 7
+#define PLATFORM_KEY_UP    8
+#define PLATFORM_KEY_LEFT  9
+#define PLATFORM_KEY_DOWN  10
+#define PLATFORM_KEY_RIGHT 11
 
 typedef u32 ButtonHandle;
 

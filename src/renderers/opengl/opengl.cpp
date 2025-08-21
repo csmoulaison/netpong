@@ -196,39 +196,42 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	glClearColor(0.0f, 0.0f, 0.0f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Update box ubo
-	float* cube = render_list->cubes[0];
-
-	BoxUbo box_ubo = {
-		.translation = {
-			1.0f, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			cube[0], cube[1], 0.0f, 1.0f
-		},
-		.scale = {
-			((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
-			0.0f, cube[3], 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f
-		}
-	};
-
-
-	glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
-	void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-	memcpy(p_box_ubo, &box_ubo, sizeof(BoxUbo));
-	glUnmapBuffer(GL_UNIFORM_BUFFER);
-
-	// Draw grid
+	// Draw boxes
 	glUseProgram(gl->box_program);
-
 	u32 box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->box_ubo);
 	glUniformBlockBinding(gl->box_program, box_ubo_block_index, 0);
 
 	glBindVertexArray(gl->quad_vao);
-	glDrawArrays(GL_TRIANGLES, 0, 6);
+
+	for(u32 i = 0; i < render_list->cubes_len; i++)
+	{
+		// Update ubo
+		float* cube = render_list->cubes[i];
+
+		BoxUbo box_ubo = {
+			.translation = {
+				1.0f, 0.0f, 0.0f, 0.0f,
+				0.0f, 1.0f, 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				cube[0], cube[1], 0.0f, 1.0f
+			},
+			.scale = {
+				((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
+				0.0f, cube[3], 0.0f, 0.0f,
+				0.0f, 0.0f, 1.0f, 0.0f,
+				0.0f, 0.0f, 0.0f, 1.0f
+			}
+		};
+
+		glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
+		void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+		memcpy(p_box_ubo, &box_ubo, sizeof(BoxUbo));
+		glUnmapBuffer(GL_UNIFORM_BUFFER);
+
+		// Draw
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+	}
 
 	/* Update text ubo
 	TextUbo text_ubo;	
