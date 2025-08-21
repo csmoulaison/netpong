@@ -17,6 +17,7 @@ void arena_destroy(Arena* arena)
 
 void* arena_alloc(Arena* arena, u64 size)
 {
+	printf("Arena allocation from %u-%u (%u bytes)\n", arena->index, arena->index + size, size);
 	arena->index += size;
 	return &arena->region[arena->index - size];
 }

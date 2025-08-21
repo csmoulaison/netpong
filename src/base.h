@@ -12,6 +12,21 @@
 
 #define panic() printf("Panic at %s:%u\n", __FILE__, __LINE__); exit(1)
 
+#define DEBUG
+#define DEBUG_STRICT
+
+#define ASSERT(assertion) if(!assertion) { printf("Assertion failed at %s:%u\n", __FILE, __LINE__); exit(1); }
+#ifdef DEBUG
+	#define DEBUG_ASSERT(assertion) ASSERT(assertion)
+#else
+	#define DEBUG_ASSERT
+#endif
+#ifdef STRICT
+	#define STRICT_ASSERT(assertion) ASSERT(assertion)
+#else
+	#define STRICT_ASSERT
+#endif
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;

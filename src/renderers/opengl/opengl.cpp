@@ -199,30 +199,14 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	// Update box ubo
 	float* cube = render_list->cubes[0];
 
-	// NOW - why is thes not working.
-	// some qs: row vs column major ordering.
-	float translation[16] = { 
-		1.0f, 0.0f, 0.0f, cube[0],
-		0.0f, 1.0f, 0.0f, cube[1],
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 0.0f, 1.0f
-	};
-
-	float scale[16] = { 
-		((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
-		0.0f, cube[3], 0.0f, 0.0f,
-		0.0f, 0.0f, 1.0f, 0.0f,
-		0.0f, 0.0f, 0.0f, 1.0f
-	};
-
 	BoxUbo box_ubo = {
-		{
+		.translation = {
 			1.0f, 0.0f, 0.0f, 0.0f,
 			0.0f, 1.0f, 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f,
 			cube[0], cube[1], 0.0f, 1.0f
 		},
-		{
+		.scale = {
 			((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
 			0.0f, cube[3], 0.0f, 0.0f,
 			0.0f, 0.0f, 1.0f, 0.0f,
@@ -244,7 +228,6 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	glUniformBlockBinding(gl->box_program, box_ubo_block_index, 0);
 
 	glBindVertexArray(gl->quad_vao);
-	// NOW - draw the right instances. Actually, just for loop this for now.
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
 	/* Update text ubo
@@ -252,7 +235,6 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 	float text_scale_x = 27.0f / render_list->window_width;
 	float text_scale_y = 46.0f / render_list->window_height;
 
-	// NOW - this is commented out because we don't have v2_init
 	//v2_init(text_ubo.transform_a, text_scale_x,  0);
 	//v2_init(text_ubo.transform_b, 0, -text_scale_y);
 
