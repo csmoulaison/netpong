@@ -1,20 +1,34 @@
 #include "game.h"
 
-struct Game {
-	ButtonHandle button_up;
-	ButtonHandle button_down;
+#include "server.cpp"
 
-	float paddle_y;
+struct Player {
+	float y;
+	ButtonHandle input_up;
+	ButtonHandle input_down;
+};
+
+struct Game {
+	Player players[2];
+	ButtonHandle input_quit;
+	bool close_requested;
 };
 
 Game* game_init(Platform* platform, Arena* arena)
 {
 	Game* game = (Game*)arena_alloc(arena, sizeof(Game));
 
-	game->button_up = platform_register_button(platform, PLATFORM_KEY_W);
-	game->button_down = platform_register_button(platform, PLATFORM_KEY_S);
+	game->players[0].y = 0.0f;
+	game->players[1].y = 0.0f;
 
-	game->paddle_y = 0.0f;
+	game->players[0].input_up = platform_register_button(platform, PLATFORM_KEY_W);
+	game->players[0].input_down = platform_register_button(platform, PLATFORM_KEY_S);
+
+	game->players[1].input_up = platform_register_button(platform, PLATFORM_KEY_UP);
+	game->players[1].input_down = platform_register_button(platform, PLATFORM_KEY_DOWN);
+
+	game->input_quit = platform_register_button(platform, PLATFORM_KEY_ESCAPE);
+	game->close_requested = false;
 	
 	return game;
 }
@@ -22,25 +36,29 @@ Game* game_init(Platform* platform, Arena* arena)
 void game_update(Game* game, Platform* platform, RenderList* render_list, Arena* arena)
 {
 	float speed = 1.0f * platform->delta_time;
-	if(platform_button_down(platform, game->button_up))
-		game->paddle_y += speed;
-	if(platform_button_down(platform, game->button_down))
-		game->paddle_y -= speed;
 
-	render_list->cubes_len = 2;
-	render_list->cubes[0][0] = -0.75f;
-	render_list->cubes[0][1] = game->paddle_y;
-	render_list->cubes[0][2] = 0.025f;
-	render_list->cubes[0][3] = 0.1f;
+	render_list->boxes_len = 2;
+	for(u32 i = 0; i < 2; i++) {
+		Player* player = &game->players[i];
 
-	render_list->cubes[1][0] = 0.75f;
-	render_list->cubes[1][1] = game->paddle_y;
-	render_list->cubes[1][2] = 0.025f;
-	render_list->cubes[1][3] = 0.1f;
+		if(platform_button_down(platform, player->input_up))
+			player->y += speed;
+		if(platform_button_down(platform, player->input_down))
+			player->y -= speed;
+
+		Rect* box = &render_list->boxes[i];
+		box->x = -0.75f + i * 1.5f;
+		box->y = player->y;
+		box->w = 0.025f;
+		box->h = 0.1f;
+	}
+
+	if(platform_button_down(platform, game->input_quit))
+		game->close_requested = true;
 }
 
 bool game_close_requested(Game* game)
 {
-	return false;
+	return game->close_requested;
 }
 

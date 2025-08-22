@@ -57,4 +57,8 @@ struct String {
 
 String string_create(Arena* arena, char* str, i32 len);
 
+struct Rect {
+	float x, y, w, h;
+};
+
 #endif

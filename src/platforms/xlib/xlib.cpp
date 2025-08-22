@@ -112,6 +112,8 @@ u8 xlib_platform_from_x11_key(u32 keycode)
 			return PLATFORM_KEY_DOWN;
 		case XK_Right:
 			return PLATFORM_KEY_RIGHT;
+		case XK_Escape:
+			return PLATFORM_KEY_ESCAPE;
 		default: return 0;
 	}
 }

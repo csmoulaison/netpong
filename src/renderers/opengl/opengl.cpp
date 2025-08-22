@@ -204,21 +204,21 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 
 	glBindVertexArray(gl->quad_vao);
 
-	for(u32 i = 0; i < render_list->cubes_len; i++)
+	for(u32 i = 0; i < render_list->boxes_len; i++)
 	{
 		// Update ubo
-		float* cube = render_list->cubes[i];
+		Rect box = render_list->boxes[i];
 
 		BoxUbo box_ubo = {
 			.translation = {
 				1.0f, 0.0f, 0.0f, 0.0f,
 				0.0f, 1.0f, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
-				cube[0], cube[1], 0.0f, 1.0f
+				box.x, box.y, 0.0f, 1.0f
 			},
 			.scale = {
-				((float)platform->window_height / platform->window_width) * cube[2], 0.0f, 0.0f, 0.0f,
-				0.0f, cube[3], 0.0f, 0.0f,
+				((float)platform->window_height / platform->window_width) * box.w, 0.0f, 0.0f, 0.0f,
+				0.0f, box.h, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
 				0.0f, 0.0f, 0.0f, 1.0f
 			}
