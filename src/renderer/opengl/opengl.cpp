@@ -1,4 +1,4 @@
-#include "renderer.h"
+#include "renderer/renderer.h"
 
 #include "GL/gl3w.h"
 

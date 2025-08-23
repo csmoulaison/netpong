@@ -1,4 +1,4 @@
-#include "platform.h"
+#include "platform/platform_media.h"
 
 #include <X11/extensions/Xfixes.h>
 #include <time.h>
@@ -204,7 +204,7 @@ void platform_swap_buffers(Platform* platform)
 	glXSwapBuffers(xlib->display, xlib->window);
 }
 
-u32 platform_register_button(Platform* platform, u32 keycode)
+u32 platform_register_key(Platform* platform, u32 keycode)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	xlib->input_keycode_to_button_lookup[keycode] = xlib->input_buttons_len;

@@ -1,7 +1,7 @@
-#ifndef platform_h_INCLUDED
-#define platform_h_INCLUDED
+#ifndef platform_media_h_INCLUDED
+#define platform_media_h_INCLUDED
 
-#include "base.h"
+#include "base/base.h"
 
 #define MAX_PLATFORM_BUTTONS 8
 
@@ -31,7 +31,8 @@ struct Platform {
 	float delta_time;
 };
 
-struct PlatformInitSettings{
+struct PlatformInitSettings {
+
 };
 
 // Performs all initialization tasks that can be done before initialization of
@@ -51,7 +52,7 @@ void platform_swap_buffers(Platform* platform);
 
 // Returns an identifier that can be used to check the state of a particular
 // keycode (assigned to a button) at a later time.
-ButtonHandle platform_register_button(Platform* platform, u32 keycode);
+ButtonHandle platform_register_key(Platform* platform, u32 keycode);
 
 // Returns whether a button is down/pressed/released given the identifier
 // returned by platform_register_button.

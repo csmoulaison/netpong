@@ -1,9 +1,10 @@
 #ifndef game_h_INCLUDED
 #define game_h_INCLUDED
 
-#include "base.h"
-#include "renderer.h"
-#include "platform.h"
+#include "base/base.h"
+#include "renderer/renderer.h"
+#include "platform/platform_media.h"
+#include "platform/platform_network.h"
 
 struct Game;
 

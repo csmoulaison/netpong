@@ -3,8 +3,8 @@
 
 #define RENDER_LIST_BOXES_MAX 10
 
-#include "base.h"
-#include "platform.h"
+#include "base/base.h"
+#include "platform/platform_media.h"
 
 struct Renderer {
 	void* backend;

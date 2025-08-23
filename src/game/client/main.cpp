@@ -1,7 +1,10 @@
-#include "base.h"
-#include "platform.h"
-#include "renderer.h"
-#include "game.h"
+#include "base/base.h"
+#include "platform/platform_media.h"
+#include "platform/platform_network.h"
+#include "renderer/renderer.h"
+
+#include "game/client/client.cpp"
+#include "game/client/game.cpp"
 
 i32 main(i32 argc, char** argv)
 {
