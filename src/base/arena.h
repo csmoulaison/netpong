@@ -1,7 +1,19 @@
-#include "base.h"
-#include "stdlib.h"
+#ifndef arena_h_INCLUDED
+#define arena_h_INCLUDED
 
-#define ARENA_ALLOCATIONS false
+#define DEBUG_LOG_ALLOCATIONS false
+
+struct Arena {
+	u64 index;
+	u64 size;
+	char* region;
+};
+
+Arena arena_create(u64 size);
+void arena_destroy(Arena* arena);
+void* arena_alloc(Arena* arena, u64 size);
+
+#ifdef CSM_BASE_IMPLEMENTATION
 
 Arena arena_create(u64 size)
 {
@@ -19,9 +31,13 @@ void arena_destroy(Arena* arena)
 
 void* arena_alloc(Arena* arena, u64 size)
 {
-#if ARENA_ALLOCATIONS
+#if DEBUG_LOG_ALLOCATIONS
 	printf("Arena allocation from %u-%u (%u bytes)\n", arena->index, arena->index + size, size);
 #endif
+
 	arena->index += size;
 	return &arena->region[arena->index - size];
 }
+
+#endif // CSM_BASE_IMPLEMENTATION
+#endif // arena_h_INCLUDED

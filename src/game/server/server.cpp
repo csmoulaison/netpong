@@ -16,6 +16,9 @@ struct ServerRemote {
 struct Server {
 	u8 type;
 	u8 state;
+
+	MatchState match;
+	
 	bool close_requested;
 
 	union {

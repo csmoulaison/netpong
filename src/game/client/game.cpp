@@ -3,8 +3,6 @@
 #include "platform/platform_media.h"
 #include "platform/platform_network.h"
 
-#include "game/common/match_state.cpp"
-
 struct PlayerInput {
 	ButtonHandle up;
 	ButtonHandle down;
@@ -33,6 +31,8 @@ Game* game_init(Platform* platform, Arena* arena)
 	game->input_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
 	game->close_requested = false;
+
+	platform_init_client_socket();
 
 	return game;
 }

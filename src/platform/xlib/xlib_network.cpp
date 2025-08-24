@@ -12,7 +12,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-// NOW - implement these
 PlatformSocket platform_init_server_socket()
 {
 	i32 sockfd;
@@ -21,6 +20,8 @@ PlatformSocket platform_init_server_socket()
 	}
 
 	struct sockaddr_in servaddr;
+	// NOW - um, memset 0? after this works, just init to 0 with {0} and see if it
+	// works.
 	memset(&servaddr, 0, sizeof(servaddr));
 
 	struct sockaddr_in cliaddr;
@@ -49,8 +50,32 @@ PlatformSocket platform_init_server_socket()
 	return PlatformSocket{};
 }
 
+// NOW - implement these
 PlatformSocket platform_init_client_socket()
 {
+	i32 sockfd;
+	if((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) {
+		panic();
+	}
+
+	struct sockaddr_in servaddr;
+	memset(&servaddr, 0, sizeof(servaddr));
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(8080);
+	servaddr.sin_addr.s_addr = INADDR_ANY;
+
+	socklen_t len;
+
+	const char* msg = "Hello from the client!";
+	sendto(sockfd, msg, strlen(msg), MSG_CONFIRM, (struct sockaddr*)&servaddr, sizeof(servaddr));
+	printf("Hello message sent!\n");
+
+	char buffer[256];
+	i32 n = recvfrom(sockfd, buffer, 256, MSG_WAITALL, (struct sockaddr*)&servaddr, &len);
+	buffer[n] = '\0';
+	printf("Server: %s\n", buffer);
+
+	close(sockfd);
 	return PlatformSocket{};
 }
 
