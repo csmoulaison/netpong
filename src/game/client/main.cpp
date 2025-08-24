@@ -26,5 +26,7 @@ i32 main(i32 argc, char** argv)
 		game_update(game, platform, render_list, &program_arena);
 		renderer_update(renderer, render_list, platform, &program_arena);
 		platform_swap_buffers(platform);
+
+		sleep(1);
 	}
 }

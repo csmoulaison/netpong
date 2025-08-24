@@ -1,7 +1,7 @@
 #ifndef arena_h_INCLUDED
 #define arena_h_INCLUDED
 
-#define DEBUG_LOG_ALLOCATIONS false
+#define DEBUG_LOG_ALLOCATIONS true
 
 struct Arena {
 	u64 index;

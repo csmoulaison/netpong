@@ -1,6 +1,8 @@
 #define CSM_BASE_IMPLEMENTATION
 #include "base/base.h"
 
+#include <unistd.h>
+
 #include "base/base.h"
 #include "platform/platform_network.h"
 #include "renderer/renderer.h"
@@ -15,5 +17,6 @@ i32 main(i32 argc, char** argv)
 
 	while(server_close_requested(server) != true) {
 		server_poll_events(server);
+		sleep(1);
 	}
 }

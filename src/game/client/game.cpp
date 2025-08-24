@@ -13,6 +13,8 @@ struct Game {
 	PlayerInput players[2];
 	ButtonHandle input_quit;
 	bool close_requested;
+
+	PlatformSocket* client_socket;
 };
 
 Game* game_init(Platform* platform, Arena* arena)
@@ -32,7 +34,7 @@ Game* game_init(Platform* platform, Arena* arena)
 
 	game->close_requested = false;
 
-	platform_init_client_socket();
+	game->client_socket = platform_init_client_socket(arena);
 
 	return game;
 }
@@ -60,6 +62,8 @@ void game_update(Game* game, Platform* platform, RenderList* render_list, Arena*
 
 	if(platform_button_down(platform, game->input_quit))
 		game->close_requested = true;
+
+	platform_send_packet(game->client_socket, 0, "Hello from client!");
 }
 
 bool game_close_requested(Game* game)

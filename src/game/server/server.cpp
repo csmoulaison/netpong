@@ -6,11 +6,14 @@
 #define SERVER_STATE_GAME 1
 
 struct ServerLocal {
-
 };
 
 struct ServerRemote {
-	PlatformSocket socket;
+	PlatformSocket* socket;
+};
+
+struct ClientPacket {
+	ClientPacketType type;
 };
 
 struct Server {
@@ -18,7 +21,6 @@ struct Server {
 	u8 state;
 
 	MatchState match;
-	
 	bool close_requested;
 
 	union {
@@ -38,7 +40,7 @@ Server* server_init(u8 type, Arena* arena)
 		case SERVER_TYPE_LOCAL:
 			break;
 		case SERVER_TYPE_REMOTE:
-			server->remote.socket = platform_init_server_socket();
+			server->remote.socket = platform_init_server_socket(arena);
 			break;
 		default: break;
 	}
@@ -53,4 +55,14 @@ bool server_close_requested(Server* server)
 
 void server_poll_events(Server* server)
 {
+	// NOW - this is dirty shit dude. arena_create should be able to allocate from
+	// an existing arena
+	Arena packet_arena = arena_create(4096);
+	PlatformPayload payload = platform_receive_packets(server->remote.socket, &packet_arena);
+	PlatformPacket* packet = payload.head;
+	
+	while(packet != nullptr) {
+
+	}
+	arena_destroy(&packet_arena);
 }
