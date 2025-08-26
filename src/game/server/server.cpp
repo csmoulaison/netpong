@@ -12,10 +12,6 @@ struct ServerRemote {
 	PlatformSocket* socket;
 };
 
-struct ClientPacket {
-	ClientPacketType type;
-};
-
 struct Server {
 	u8 type;
 	u8 state;
@@ -62,7 +58,18 @@ void server_poll_events(Server* server)
 	PlatformPacket* packet = payload.head;
 	
 	while(packet != nullptr) {
+		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
+		switch(header->type) {
+			case CLIENT_PACKET_JOIN:
+				ServerJoinAcknowledgePacket acknowledge_packet;
+				acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
 
+				platform_send_packet(server->remote.socket, 0, (void*)&acknowledge_packet);
+				break;
+			case CLIENT_PACKET_UPDATE:
+				break;
+			default: break;
+		}
 	}
 	arena_destroy(&packet_arena);
 }

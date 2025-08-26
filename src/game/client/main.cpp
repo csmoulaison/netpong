@@ -6,6 +6,7 @@
 #include "renderer/renderer.h"
 
 #include "game/common/match_state.cpp"
+#include "game/common/packets.cpp"
 #include "game/server/server.cpp"
 #include "game/client/client.cpp"
 #include "game/client/game.cpp"

@@ -69,15 +69,15 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	return platform_socket;
 }
 
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, const char* packet) {
+void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet) {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
 	assert(connection_id < sock->connections_len);
 
 	struct sockaddr_in* server_address = sock->connections;
-	printf("Packet sent: size %i, address %i %i %i\n", strlen(packet), server_address->sin_family, server_address->sin_addr.s_addr, server_address->sin_port);
+	printf("Packet sent: size %i, address %i %i %i\n", strlen((char*)packet), server_address->sin_family, server_address->sin_addr.s_addr, server_address->sin_port);
 
-	sendto(sock->descriptor, packet, strlen(packet), MSG_CONFIRM, 
+	sendto(sock->descriptor, packet, strlen((char*)packet), MSG_CONFIRM, 
 		(struct sockaddr*)&sock->connections[connection_id], sizeof(struct sockaddr_in));
 }
 

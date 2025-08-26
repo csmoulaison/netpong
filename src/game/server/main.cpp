@@ -8,6 +8,7 @@
 #include "renderer/renderer.h"
 
 #include "game/common/match_state.cpp"
+#include "game/server/packets.cpp"
 #include "game/server/server.cpp"
 
 i32 main(i32 argc, char** argv)

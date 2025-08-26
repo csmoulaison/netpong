@@ -31,7 +31,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena);
 PlatformSocket* platform_init_client_socket(Arena* arena);
 
 // Sends a packet to given connection. Assumes the connection exists.
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, const char* packet);
+void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet);
 
 // Pull all packets received since the previous call of this function.
 // 

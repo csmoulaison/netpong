@@ -63,7 +63,8 @@ void game_update(Game* game, Platform* platform, RenderList* render_list, Arena*
 	if(platform_button_down(platform, game->input_quit))
 		game->close_requested = true;
 
-	platform_send_packet(game->client_socket, 0, "Hello from client!");
+	const char* msg = "Hello from client!";
+	platform_send_packet(game->client_socket, 0, (void*)msg);
 }
 
 bool game_close_requested(Game* game)
