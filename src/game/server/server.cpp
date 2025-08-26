@@ -49,7 +49,7 @@ bool server_close_requested(Server* server)
 	return false;
 }
 
-void server_poll_events(Server* server)
+void server_process_packets(Server* server)
 {
 	// NOW - this is dirty shit dude. arena_create should be able to allocate from
 	// an existing arena

@@ -1,8 +1,3 @@
-struct Client {
-	u8 state;
-	PlatformSocket socket;
-};
-
 enum ClientPacketType {
 	CLIENT_PACKET_JOIN,
 	CLIENT_PACKET_UPDATE
@@ -19,7 +14,8 @@ struct ClientJoinPacket {
 
 struct ClientUpdatePacket {
 	ClientPacketHeader header;
-	float paddle_position;
+	bool input_up;
+	bool input_down;
 };
 
 enum ServerPacketType {
@@ -34,6 +30,7 @@ struct ServerPacketHeader {
 
 struct ServerJoinAcknowledgePacket {
 	ServerPacketHeader header;
+	u8 client_id;
 };
 
 struct ServerUpdatePacket {
