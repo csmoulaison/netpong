@@ -60,4 +60,7 @@ bool platform_button_down(Platform* platform, u32 button_id);
 bool platform_button_pressed(Platform* platform, u32 button_id);
 bool platform_button_released(Platform* platform, u32 button_id);
 
+// Returns a high resolution system timestamp in seconds.
+double platform_time_in_seconds();
+
 #endif

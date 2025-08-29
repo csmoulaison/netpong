@@ -194,6 +194,7 @@ void platform_update(Platform* platform, Arena* arena)
     if(clock_gettime(CLOCK_REALTIME, &time_cur)) {
 	    panic();
     }
+
     platform->delta_time = time_cur.tv_sec - xlib->time_previous.tv_sec + (float)time_cur.tv_nsec / 1000000000 - (float)xlib->time_previous.tv_nsec / 1000000000;
     xlib->time_previous = time_cur;
 }
@@ -233,4 +234,13 @@ bool platform_button_released(Platform* platform, u32 button_id)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	return xlib->input_button_states[button_id] & INPUT_RELEASED_BIT;
+}
+
+double platform_time_in_seconds()
+{
+	struct timespec time_current;
+	if(clock_gettime(CLOCK_REALTIME, &time_current)) {
+		panic();
+	}
+	return (double)time_current.tv_sec + (double)time_current.tv_nsec / 1'000'000'000.0f;
 }

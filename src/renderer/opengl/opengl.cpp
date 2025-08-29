@@ -182,7 +182,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	return renderer;
 }
 
-void renderer_update(Renderer* renderer, RenderList* render_list, Platform* platform, Arena* arena)
+void renderer_update(Renderer* renderer, RenderState* render_state, Platform* platform, Arena* arena)
 {
 	GlBackend* gl = (GlBackend*)renderer->backend;
 
@@ -204,10 +204,10 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 
 	glBindVertexArray(gl->quad_vao);
 
-	for(u32 i = 0; i < render_list->boxes_len; i++)
+	for(u32 i = 0; i < render_state->boxes_len; i++)
 	{
 		// Update ubo
-		Rect box = render_list->boxes[i];
+		Rect box = render_state->boxes[i];
 
 		BoxUbo box_ubo = {
 			.translation = {
@@ -235,8 +235,8 @@ void renderer_update(Renderer* renderer, RenderList* render_list, Platform* plat
 
 	/* Update text ubo
 	TextUbo text_ubo;	
-	float text_scale_x = 27.0f / render_list->window_width;
-	float text_scale_y = 46.0f / render_list->window_height;
+	float text_scale_x = 27.0f / render_state->window_width;
+	float text_scale_y = 46.0f / render_state->window_height;
 
 	//v2_init(text_ubo.transform_a, text_scale_x,  0);
 	//v2_init(text_ubo.transform_b, 0, -text_scale_y);
