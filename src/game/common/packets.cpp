@@ -1,40 +1,44 @@
+// Client packets
 enum ClientPacketType {
 	CLIENT_PACKET_JOIN,
-	CLIENT_PACKET_UPDATE
+	CLIENT_PACKET_INPUT
 };
 
 struct ClientPacketHeader {
 	ClientPacketType type;
-	i64 tick_counter;
+	u8 client_id;
+	i32 frame_number;
 };
 
 struct ClientJoinPacket {
 	ClientPacketHeader header;
 };
 
-struct ClientUpdatePacket {
+struct ClientInputPacket {
 	ClientPacketHeader header;
 	bool input_up;
 	bool input_down;
 };
 
+// Server packets
 enum ServerPacketType {
 	SERVER_PACKET_JOIN_ACKNOWLEDGE,
-	SERVER_PACKET_UPDATE
+	SERVER_PACKET_STATE_UPDATE
 };
 
 struct ServerPacketHeader {
 	ServerPacketType type;
-	i64 tick_counter;
+	u32 frame_number;
 };
 
 struct ServerJoinAcknowledgePacket {
 	ServerPacketHeader header;
 	u8 client_id;
+	u32 frame_number;
 };
 
-struct ServerUpdatePacket {
+struct ServerStateUpdatePacket {
 	ServerPacketHeader header;
 	float paddle_positions[2];
-	float ball_position[2];
+	float paddle_velocities[2];
 };

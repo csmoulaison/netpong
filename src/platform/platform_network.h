@@ -7,7 +7,13 @@
 #define MAX_PAYLOAD_PACKETS 64
 #define MAX_PACKET_BYTES 2048
 
+enum SocketType {
+	SOCKET_TYPE_CLIENT,
+	SOCKET_TYPE_SERVER
+};
+
 struct PlatformSocket {
+	SocketType type;
 	void* backend;
 };
 
@@ -31,7 +37,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena);
 PlatformSocket* platform_init_client_socket(Arena* arena);
 
 // Sends a packet to given connection. Assumes the connection exists.
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet);
+void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size);
 
 // Pull all packets received since the previous call of this function.
 // 

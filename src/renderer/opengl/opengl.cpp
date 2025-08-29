@@ -264,7 +264,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
-	glBindVertexArray(gl->quad_vao); // NOW - redundant, considering we have no other VAOs to bind, yes?
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 0); // NOW - draw correct amount of text quads
+	glBindVertexArray(gl->quad_vao); // TODO - redundant, considering we have no other VAOs to bind, yes?
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 0); // TODO - draw correct amount of text quads
 	*/
 }

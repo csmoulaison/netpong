@@ -3,13 +3,14 @@
 
 #include "platform/platform_media.h"
 #include "platform/platform_network.h"
+#include "platform/platform_time.h"
 #include "renderer/renderer.h"
 
-#include "game/common/match_state.cpp"
+// TODO - Rethink client/server/common split. It seems increasingly non-meaningful.
+#include "game/common/world.cpp"
 #include "game/common/packets.cpp"
 #include "game/server/server.cpp"
 #include "game/client/client.cpp"
-#include "game/client/game.cpp"
 
 i32 main(i32 argc, char** argv)
 {
@@ -19,20 +20,20 @@ i32 main(i32 argc, char** argv)
 	Renderer* renderer = renderer_init(nullptr, platform, &program_arena); 
 
 	platform_init_post_graphics(platform);
-	Game* game = game_init(platform, &program_arena);
+	Client* client = client_init(platform, &program_arena);
 
 	RenderState* previous_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 
 	double time = 0.0f;
-	double delta_time = 0.005f;
+	double delta_time = 0.01f;
 
 	double current_time = platform_time_in_seconds();
 	double time_accumulator = 0.0f;
 
 	bool first_frame = true;
 
-	while(game_close_requested(game) != true) {
+	while(client_close_requested(client) != true) {
 		double new_time = platform_time_in_seconds();
 		double frame_time = new_time - current_time;
 		if(frame_time > 0.25f) {
@@ -40,13 +41,12 @@ i32 main(i32 argc, char** argv)
 		}
 		current_time = new_time;
 		time_accumulator += frame_time;
-		printf("RENDER FRAME - Accumulator: %f\n", time_accumulator);
 
 		while(time_accumulator >= delta_time) {
 			platform_update(platform, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
-			game_update(game, platform, current_render_state, &program_arena);
+			client_update(client, platform, current_render_state, delta_time);
 
 			if(first_frame) {
 				memcpy(previous_render_state, current_render_state, sizeof(RenderState));
@@ -55,7 +55,6 @@ i32 main(i32 argc, char** argv)
 
 			time_accumulator -= delta_time;
 			time += delta_time;
-			printf("delta: %f\naccum: %f\n", delta_time, time_accumulator);
 		}
 
 		double time_alpha = time_accumulator / delta_time;

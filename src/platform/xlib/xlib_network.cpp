@@ -22,6 +22,7 @@ struct XlibSocket {
 PlatformSocket* platform_init_server_socket(Arena* arena)
 {
 	PlatformSocket* platform_socket = (PlatformSocket*)arena_alloc(arena, sizeof(PlatformSocket));
+	platform_socket->type = SOCKET_TYPE_SERVER;
 	platform_socket->backend = arena_alloc(arena, sizeof(XlibSocket));
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
@@ -33,7 +34,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 	}
 
 	struct sockaddr_in server_address;
-	memset(&server_address, 0, sizeof(server_address));
+	memset(&server_address, 0, sizeof(struct sockaddr_in));
 
 	server_address.sin_family = AF_INET;
 	server_address.sin_addr.s_addr = INADDR_ANY;
@@ -49,6 +50,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 PlatformSocket* platform_init_client_socket(Arena* arena)
 {
 	PlatformSocket* platform_socket = (PlatformSocket*)arena_alloc(arena, sizeof(PlatformSocket));
+	platform_socket->type = SOCKET_TYPE_CLIENT;
 	platform_socket->backend = arena_alloc(arena, sizeof(XlibSocket));
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
@@ -69,15 +71,15 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	return platform_socket;
 }
 
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet) {
+void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size) {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
 	assert(connection_id < sock->connections_len);
 
-	struct sockaddr_in* server_address = sock->connections;
-	//printf("Packet sent: size %i, address %i %i %i\n", strlen((char*)packet), server_address->sin_family, server_address->sin_addr.s_addr, server_address->sin_port);
+	struct sockaddr_in* server_address = &sock->connections[connection_id];
+	//printf("Packet sent: size %i, address %i %i %i\n", size, server_address->sin_family, server_address->sin_addr.s_addr, server_address->sin_port);
 
-	sendto(sock->descriptor, packet, strlen((char*)packet), MSG_CONFIRM, 
+	sendto(sock->descriptor, packet, size, MSG_CONFIRM, 
 		(struct sockaddr*)&sock->connections[connection_id], sizeof(struct sockaddr_in));
 }
 
@@ -98,19 +100,46 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 		// -1 means there are no more packets.
 		if(data_size != -1) { 
-			if(*current_packet != nullptr) {
-				*current_packet = (*current_packet)->next;
-			}
+			printf("Packet received: size %i, address %i %i %i\n", data_size, sender_address.sin_family, sender_address.sin_addr.s_addr, sender_address.sin_port);
+
+			//if(*current_packet != nullptr) {
+			//	*current_packet = (*current_packet)->next;
+			//}
 			*current_packet = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
 
 			PlatformPacket* packet = *current_packet;
-			// NOW - connection_id needs to be set by comparing. Servers and clients
-			// will handle this operation differently.
-			packet->connection_id = 0;
 			packet->data_size = data_size;
 			packet->data = (char*)arena_alloc(arena, data_size);
+
+			if(socket->type == SOCKET_TYPE_SERVER) {
+				// Compare against other connections.
+				bool connection_already_exists = false;
+				for(u8 i = 0; i < sock->connections_len; i++) {
+					struct sockaddr_in* existing_address = &sock->connections[i];
+					bool ip_match = (memcmp(&existing_address->sin_addr.s_addr, &sender_address.sin_addr.s_addr, sizeof(existing_address->sin_addr.s_addr)) == 0);
+					bool port_match = (memcmp(&existing_address->sin_port, &sender_address.sin_port, sizeof(existing_address->sin_port)) == 0);
+
+					if(existing_address->sin_addr.s_addr == sender_address.sin_addr.s_addr &&
+			        existing_address->sin_port == sender_address.sin_port) {
+						packet->connection_id = i;
+						connection_already_exists = true;
+					}
+				}
+				if(!connection_already_exists) {
+					// TODO - Reject if too many connections.
+					packet->connection_id = sock->connections_len;
+					sock->connections[sock->connections_len] = sender_address;
+					sock->connections_len++;
+					printf("add connection\n");
+				}
+			} else {
+				packet->connection_id = 0;
+			}
 			memcpy(packet->data, data, data_size);
 		} else {
+			if((*current_packet) != nullptr) {
+				(*current_packet)->next = nullptr;
+			}
 			return payload;
 		}
 	}

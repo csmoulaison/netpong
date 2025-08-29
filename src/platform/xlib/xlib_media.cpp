@@ -1,7 +1,6 @@
 #include "platform/platform_media.h"
 
 #include <X11/extensions/Xfixes.h>
-#include <time.h>
 
 #define INPUT_DOWN_BIT     0b00000001
 #define INPUT_PRESSED_BIT  0b00000010
@@ -17,7 +16,6 @@ struct Xlib {
 	u32 mouse_just_warped;
 	i32 stored_cursor_x;
 	i32 stored_cursor_y;
-	struct timespec time_previous;
 
 	u8 input_buttons_len;
 	u8 input_button_states[MAX_PLATFORM_BUTTONS];
@@ -80,11 +78,6 @@ void platform_init_post_graphics(Platform* platform)
 	XGetWindowAttributes(xlib->display, xlib->window, &window_attributes);
 	platform->window_width = window_attributes.width;
 	platform->window_height = window_attributes.height;
-
-    if(clock_gettime(CLOCK_REALTIME, &xlib->time_previous))
-    {
-        panic();
-    }
 }
 
 u8 xlib_platform_from_x11_key(u32 keycode)
@@ -189,14 +182,6 @@ void platform_update(Platform* platform, Arena* arena)
 			default: break;
 		}
 	}
-
-	struct timespec time_cur;
-    if(clock_gettime(CLOCK_REALTIME, &time_cur)) {
-	    panic();
-    }
-
-    platform->delta_time = time_cur.tv_sec - xlib->time_previous.tv_sec + (float)time_cur.tv_nsec / 1000000000 - (float)xlib->time_previous.tv_nsec / 1000000000;
-    xlib->time_previous = time_cur;
 }
 
 void platform_swap_buffers(Platform* platform)
@@ -234,13 +219,4 @@ bool platform_button_released(Platform* platform, u32 button_id)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	return xlib->input_button_states[button_id] & INPUT_RELEASED_BIT;
-}
-
-double platform_time_in_seconds()
-{
-	struct timespec time_current;
-	if(clock_gettime(CLOCK_REALTIME, &time_current)) {
-		panic();
-	}
-	return (double)time_current.tv_sec + (double)time_current.tv_nsec / 1'000'000'000.0f;
 }
