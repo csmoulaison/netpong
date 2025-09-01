@@ -16,14 +16,16 @@ struct ClientJoinPacket {
 
 struct ClientInputPacket {
 	ClientPacketHeader header;
-	bool input_up;
-	bool input_down;
+	bool input_move_up;
+	bool input_move_down;
 };
 
 // Server packets
 enum ServerPacketType {
 	SERVER_PACKET_JOIN_ACKNOWLEDGE,
-	SERVER_PACKET_STATE_UPDATE
+	SERVER_PACKET_STATE_UPDATE,
+	SERVER_PACKET_SPEED_UP,
+	SERVER_PACKET_SLOW_DOWN
 };
 
 struct ServerPacketHeader {
@@ -39,6 +41,13 @@ struct ServerJoinAcknowledgePacket {
 
 struct ServerStateUpdatePacket {
 	ServerPacketHeader header;
-	float paddle_positions[2];
-	float paddle_velocities[2];
+	World world_state;
+};
+
+struct ServerSpeedUpPacket {
+	ServerPacketHeader header;
+};
+
+struct ServerSlowDownPacket {
+	ServerPacketHeader header;
 };

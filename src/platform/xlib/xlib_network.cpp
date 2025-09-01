@@ -100,12 +100,15 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 		// -1 means there are no more packets.
 		if(data_size != -1) { 
-			printf("Packet received: size %i, address %i %i %i\n", data_size, sender_address.sin_family, sender_address.sin_addr.s_addr, sender_address.sin_port);
+			//printf("Packet received: size %i, address %i %i %i\n", data_size, sender_address.sin_family, sender_address.sin_addr.s_addr, sender_address.sin_port);
 
-			//if(*current_packet != nullptr) {
-			//	*current_packet = (*current_packet)->next;
-			//}
-			*current_packet = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
+			if(*current_packet != nullptr) {
+				(*current_packet)->next = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
+				current_packet = &(*current_packet)->next;
+			} else {
+				*current_packet = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
+			}
+			(*current_packet)->next = nullptr;
 
 			PlatformPacket* packet = *current_packet;
 			packet->data_size = data_size;
@@ -137,9 +140,9 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 			}
 			memcpy(packet->data, data, data_size);
 		} else {
-			if((*current_packet) != nullptr) {
-				(*current_packet)->next = nullptr;
-			}
+			//if((*current_packet) != nullptr) {
+			//	(*current_packet)->next = nullptr;
+			//}
 			return payload;
 		}
 	}

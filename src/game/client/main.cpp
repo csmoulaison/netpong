@@ -7,6 +7,7 @@
 #include "renderer/renderer.h"
 
 // TODO - Rethink client/server/common split. It seems increasingly non-meaningful.
+#include "game/common/config.cpp"
 #include "game/common/world.cpp"
 #include "game/common/packets.cpp"
 #include "game/server/server.cpp"
@@ -26,7 +27,6 @@ i32 main(i32 argc, char** argv)
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 
 	double time = 0.0f;
-	double delta_time = 0.01f;
 
 	double current_time = platform_time_in_seconds();
 	double time_accumulator = 0.0f;
@@ -42,22 +42,22 @@ i32 main(i32 argc, char** argv)
 		current_time = new_time;
 		time_accumulator += frame_time;
 
-		while(time_accumulator >= delta_time) {
+		while(time_accumulator >= client->frame_length) {
 			platform_update(platform, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
-			client_update(client, platform, current_render_state, delta_time);
+			client_update(client, platform, current_render_state);
 
 			if(first_frame) {
 				memcpy(previous_render_state, current_render_state, sizeof(RenderState));
 				first_frame = false;
 			}
 
-			time_accumulator -= delta_time;
-			time += delta_time;
+			time_accumulator -= client->frame_length;
+			time += client->frame_length;
 		}
 
-		double time_alpha = time_accumulator / delta_time;
+		double time_alpha = time_accumulator / client->frame_length;
 		RenderState interpolated_render_state = renderer_interpolate_states(previous_render_state, current_render_state, time_alpha);
 
 		// Render based on render states now.

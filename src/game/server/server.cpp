@@ -1,4 +1,5 @@
-#define MAX_BUFFERED_INPUTS 64
+#define INPUT_QUEUE_SIZE 64
+#define BUFFERED_INPUTS_TARGET 3
 
 /* TODO - Need a scheme for client local server.
 enum ServerType {
@@ -7,8 +8,11 @@ enum ServerType {
 }; */
 
 struct ConnectedClient {
-	PlayerInput input_buffer[MAX_BUFFERED_INPUTS];
-	u8 input_buffer_len;
+	// NOW - not queue, buffer
+	PlayerInput input_queue[INPUT_QUEUE_SIZE];
+	i8 input_queue_front;
+	i8 input_queue_back;
+	i8 input_queue_len;
 };
 
 struct Server {
@@ -29,17 +33,18 @@ Server* server_init(Arena* arena)
 	server->frame = 0;
 
 	world_init(&server->world);
+
+	for(u8 i = 0; i < MAX_CLIENTS; i++) {
+		ConnectedClient* client;
+		client->input_queue_front = 0;
+		client->input_queue_back = 0;
+		client->input_queue_len = 0;
+	}
 	server->connected_clients_len = 0;
 
 	return server;
 }
 
-void server_update(Server* server)
-{
-
-}
-
-// NOW - this is sort of just the server update function right now. Clean up!
 void server_process_packets(Server* server)
 {
 	// TODO - this is dirty shit dude. arena_create should be able to allocate from
@@ -53,19 +58,18 @@ void server_process_packets(Server* server)
 	
 	while(packet != nullptr) {
 		i8 connection_id = packet->connection_id;
-
 		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
 
 		ServerJoinAcknowledgePacket server_acknowledge_packet;
 		ClientInputPacket* input_packet;
-
+		ConnectedClient* client;
 		switch(header->type) {
 			case CLIENT_PACKET_JOIN:
 				server_acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
 				server_acknowledge_packet.client_id = connection_id;
 				server_acknowledge_packet.frame_number = server->frame;
-
 				assert(connection_id <= server->connected_clients_len);
+
 				if(connection_id == server->connected_clients_len) {
 					server->connected_clients_len++;
 				}
@@ -74,7 +78,36 @@ void server_process_packets(Server* server)
 				printf("Acknowledging client join.\n");
 				break;
 			case CLIENT_PACKET_INPUT:
-				input_packet = (ClientInputPacket*)packet;
+				// NOW - Duh, we are assuming these are coming in order, etc. A simple
+				// queueing procedure is just totally wrong for this. We will instead need
+				// to have the head and tails of this thing be based on something more like
+				// it is on the client side. Figure out what the last input we care about is
+				// and disregard the rest.
+				// 
+				// If you ever lose track of what you're doing here, just imagine the packets
+				// all coming in out of order, and filling the holes.
+				// 
+				// AH, this is why Overwatch talks about telling the client to speed up in
+				// the event of a missed packet, instead of in the event of a big/small
+				// buffer. It's because the hole in the buffer is your only rigorous way of
+				// defining the need for more packets in the buffer. Rewatch to figure out
+				// how they describe the need for the client to slow down the sending of
+				// packets.
+
+				// NOW - It should be noted that the order is currently correct, and we are
+				// still having issues. Figure out why that would be.
+				input_packet = (ClientInputPacket*)packet->data;
+				client = &server->connected_clients[header->client_id];
+
+				printf("client frame: %u\n", header->frame_number);
+
+				assert(client->input_queue_len < INPUT_QUEUE_SIZE);
+				client->input_queue[client->input_queue_back] = PlayerInput { 
+					.move_up = input_packet->input_move_up, 
+					.move_down = input_packet->input_move_down
+				};
+				client->input_queue_len++;
+				client->input_queue_back = (client->input_queue_back + 1) % INPUT_QUEUE_SIZE;
 				break;
 			default: break;
 		}
@@ -82,12 +115,57 @@ void server_process_packets(Server* server)
 	}
 	arena_destroy(&packet_arena);
 
-	if(server->connected_clients_len == 0) {
-		server->frame = 0;
-	} else {
+}
+
+void server_update(Server* server, float delta_time)
+{
+	server_process_packets(server);
+
+	if(server->connected_clients_len > 0) {
+		for(u8 i = 0; i < server->connected_clients_len; i++) {
+			ConnectedClient* client = &server->connected_clients[i];
+
+			if(client->input_queue_len > BUFFERED_INPUTS_TARGET) {
+				ServerSlowDownPacket slow_packet;
+				slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
+				slow_packet.header.frame_number = server->frame;
+				platform_send_packet(server->socket, i, &slow_packet, sizeof(ServerSlowDownPacket));
+			} else if(client->input_queue_len < BUFFERED_INPUTS_TARGET) {
+				ServerSpeedUpPacket speed_packet;
+				speed_packet.header.type = SERVER_PACKET_SPEED_UP;
+				speed_packet.header.frame_number = server->frame;
+				platform_send_packet(server->socket, i, &speed_packet, sizeof(ServerSpeedUpPacket));
+			}
+
+			if(client->input_queue_len > 0) {
+				server->world.player_inputs[i] = client->input_queue[client->input_queue_front];
+				if(client->input_queue_len > 1) {
+					client->input_queue_front = (client->input_queue_front + 1) % INPUT_QUEUE_SIZE;
+					client->input_queue_len--;
+				} else {
+					//printf("Warning: only 1 input in queue for player %u. (%u)\n", i, server->frame);
+				}
+			} else {
+				server->world.player_inputs[i] = {0};
+			}
+		}
+		world_simulate(&server->world, delta_time);
+
+		ServerStateUpdatePacket update_packet = {};
+		update_packet.header.type = SERVER_PACKET_STATE_UPDATE;
+		update_packet.header.frame_number = server->frame;
+		update_packet.world_state = server->world;
+
+		for(u8 i = 0; i < server->connected_clients_len; i++) {
+			platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
+		}
+
 		server->frame++;
+	} else {
+		server->frame = 0;
 	}
 }
+
 
 bool server_close_requested(Server* server)
 {

@@ -1,6 +1,7 @@
 #ifndef renderer_h_INCLUDED
 #define renderer_h_INCLUDED
 
+#define RENDERER_NO_INTERPOLATION true
 #define RENDER_LIST_BOXES_MAX 10
 
 #include "base/base.h"
@@ -25,6 +26,10 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 RenderState renderer_interpolate_states(RenderState* previous, RenderState* current, float t)
 {
+#ifdef RENDERER_NO_INTERPOLATION
+	return *current;
+#endif
+
 	// TODO - handle differing numbers of cubes. we assert that this isn't the case for now.
 	assert(previous->boxes_len == current->boxes_len);
 
