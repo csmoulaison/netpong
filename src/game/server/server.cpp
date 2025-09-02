@@ -67,7 +67,11 @@ void server_process_packets(Server* server)
 			case CLIENT_PACKET_JOIN:
 				server_acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
 				server_acknowledge_packet.client_id = connection_id;
-				server_acknowledge_packet.frame_number = server->frame;
+				// NOW - server->frame + 1 gives us the right thing. That's simply because the pulling from the
+				// input queue doesn't in any way compare the actual frames against the client frames. Much better
+				// will be to again, change the input buffer to a ring buffer that keeps track of the oldest frame,
+				// just like on the client. 
+				server_acknowledge_packet.frame_number = server->frame + 1;
 				assert(connection_id <= server->connected_clients_len);
 
 				if(connection_id == server->connected_clients_len) {
@@ -99,7 +103,11 @@ void server_process_packets(Server* server)
 				input_packet = (ClientInputPacket*)packet->data;
 				client = &server->connected_clients[header->client_id];
 
-				printf("client frame: %u\n", header->frame_number);
+				//printf("client frame: %u\n", header->frame_number);
+
+				if(input_packet->input_move_up) {
+					printf("Server: Client input received (Client %u, Server %u)\n", header->frame_number, server->frame);
+				}
 
 				assert(client->input_queue_len < INPUT_QUEUE_SIZE);
 				client->input_queue[client->input_queue_back] = PlayerInput { 
@@ -149,7 +157,14 @@ void server_update(Server* server, float delta_time)
 				server->world.player_inputs[i] = {0};
 			}
 		}
+
+		float prev_paddle_pos = server->world.paddle_positions[0];
 		world_simulate(&server->world, delta_time);
+		if(server->world.paddle_positions[0] > prev_paddle_pos) {
+			printf("Server: Paddle  UP  (Frame %u)\n", server->frame);
+		} else if(server->world.paddle_positions[0] < prev_paddle_pos) {
+			printf("Server: Paddle DOWN (Frame %u)\n", server->frame);
+		}
 
 		ServerStateUpdatePacket update_packet = {};
 		update_packet.header.type = SERVER_PACKET_STATE_UPDATE;

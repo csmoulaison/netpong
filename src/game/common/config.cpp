@@ -1,2 +1,2 @@
-#define BASE_FRAME_LENGTH 0.02f
-#define PADDLE_SPEED 2.25f
+#define BASE_FRAME_LENGTH 0.01f
+#define PADDLE_SPEED 1.75f

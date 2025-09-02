@@ -33,7 +33,6 @@ Client* client_init(Platform* platform, Arena* arena)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
-
 	client->socket = platform_init_client_socket(arena);
 	client->state = CLIENT_STATE_CONNECTING;
 	client->id = 0;
@@ -46,6 +45,8 @@ Client* client_init(Platform* platform, Arena* arena)
 	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
 	client->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
+
+	world_init(&client->world_states[client->frame]);
 
 	return client;
 }
@@ -78,6 +79,13 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	for(u32 i = 0; i < oldest_to_server_frame_delta; i++) {
 		client->world_states[i] = client->world_states[i + oldest_to_server_frame_delta];
 	}
+
+	//printf("\n   CLIENT   SERVER\n");
+	//printf("0: %.3f   %.3f\n", client->world_states[0].paddle_positions[0], server_update->world_state.paddle_positions[0]);
+	//printf("1: %.3f   %.3f\n", client->world_states[1].paddle_positions[0]);
+	//printf("2: %.3f   %.3f\n", client->world_states[2].paddle_positions[0]);
+	//printf("3: %.3f   %.3f\n", client->world_states[3].paddle_positions[0]);
+	//printf("4: %.3f   %.3f\n", client->world_states[4].paddle_positions[0]);
 
 	memcpy(&client->world_states[0], &server_update->world_state, sizeof(World));
 	i32 server_to_present_frame_delta = client->frame - server_frame;
@@ -139,7 +147,7 @@ void client_process_packets(Client* client)
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
 				update_packet = (ServerStateUpdatePacket*)packet->data;
-				client_resolve_state_update(client, update_packet);
+				//client_resolve_state_update(client, update_packet);
 				break;
 			case SERVER_PACKET_SPEED_UP:
 				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
@@ -191,9 +199,24 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	}
 
 	World* world = &client->world_states[frame_index];
+	float prev_paddle_pos = world->paddle_positions[0];
+
 	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
 	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
+
+	if(client->frame == 0) {
+		printf("faking up!\n");
+		world->player_inputs[client->id].move_up = true;
+	}
+
 	world_simulate(world, client->frame_length);
+
+	// NOW - discrete movement tracking
+	if(world->paddle_positions[0] > prev_paddle_pos) {
+		printf("Client: Paddle  UP  (Frame %u)\n", client->frame);
+	} else if(world->paddle_positions[0] < prev_paddle_pos) {
+		printf("Client: Paddle DOWN (Frame %u)\n", client->frame);
+	}
 
 	// We need to do the following now:
 	//   1. Store the newly simulated frame in the world state buffer.
@@ -223,7 +246,6 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	input_packet.header.frame_number = client->frame;
 	input_packet.input_move_up = world->player_inputs[client->id].move_up;
 	input_packet.input_move_down = world->player_inputs[client->id].move_down;
-	// NOW - down input is making it to this packet.
 	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
 
 	// Render
@@ -245,10 +267,11 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 	
 	switch(client->state) {
 		case CLIENT_STATE_CONNECTING:
-			client_update_connecting(client, platform, render_state);
 			// TODO - This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
+
+			client_update_connecting(client, platform, render_state);
 			break;
 		case CLIENT_STATE_CONNECTED:
 			client_update_connected(client, platform, render_state);
