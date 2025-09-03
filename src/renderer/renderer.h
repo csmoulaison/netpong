@@ -26,7 +26,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 RenderState renderer_interpolate_states(RenderState* previous, RenderState* current, float t)
 {
-#ifdef RENDERER_NO_INTERPOLATION
+#if RENDERER_NO_INTERPOLATION
 	return *current;
 #endif
 

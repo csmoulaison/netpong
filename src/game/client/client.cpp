@@ -1,6 +1,6 @@
 #define WORLD_STATE_BUFFER_LEN 2048
 
-#define FRAME_LENGTH_MOD 0.5f
+#define FRAME_LENGTH_MOD 0.025f
 
 enum ClientState {
 	CLIENT_STATE_CONNECTING,
@@ -72,12 +72,22 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	
 	u32 server_frame = server_update->header.frame_number;
 
+
 	i32 oldest_to_server_frame_delta = server_frame - client->oldest_stored_frame;
 	client->oldest_stored_frame = server_frame;
 	assert(oldest_to_server_frame_delta >= 0);
 
-	for(u32 i = 0; i < oldest_to_server_frame_delta; i++) {
+	for(u32 i = 0; i <= oldest_to_server_frame_delta; i++) {
 		client->world_states[i] = client->world_states[i + oldest_to_server_frame_delta];
+	}
+
+	// NOW cleanup. Works though. Need more scalable way of checking parity?
+	World* tmp_server = &server_update->world_state;
+	World* tmp_client = &client->world_states[0];
+	if(tmp_server->paddle_positions[0] != tmp_client->paddle_positions[0]
+	&& tmp_server->paddle_positions[1] != tmp_client->paddle_positions[1]) {
+		printf("Match frame: (%u)\n", server_update->header.frame_number);
+		return;
 	}
 
 	//printf("\n   CLIENT   SERVER\n");
@@ -90,7 +100,6 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	memcpy(&client->world_states[0], &server_update->world_state, sizeof(World));
 	i32 server_to_present_frame_delta = client->frame - server_frame;
 
-	// NOW - This assertion failed at high speed. Think about why.
 	assert(server_to_present_frame_delta >= 0);
 
 	for(u32 i = 1; i < server_to_present_frame_delta; i++) {
@@ -147,7 +156,7 @@ void client_process_packets(Client* client)
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
 				update_packet = (ServerStateUpdatePacket*)packet->data;
-				//client_resolve_state_update(client, update_packet);
+				client_resolve_state_update(client, update_packet);
 				break;
 			case SERVER_PACKET_SPEED_UP:
 				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
@@ -204,19 +213,13 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
 	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
 
-	if(client->frame == 0) {
-		printf("faking up!\n");
-		world->player_inputs[client->id].move_up = true;
-	}
-
 	world_simulate(world, client->frame_length);
 
-	// NOW - discrete movement tracking
-	if(world->paddle_positions[0] > prev_paddle_pos) {
-		printf("Client: Paddle  UP  (Frame %u)\n", client->frame);
-	} else if(world->paddle_positions[0] < prev_paddle_pos) {
-		printf("Client: Paddle DOWN (Frame %u)\n", client->frame);
-	}
+//	if(world->paddle_positions[0] > prev_paddle_pos) {
+//		printf("Client: Paddle  UP  (Frame %u)\n", client->frame);
+//	} else if(world->paddle_positions[0] < prev_paddle_pos) {
+//		printf("Client: Paddle DOWN (Frame %u)\n", client->frame);
+//	}
 
 	// We need to do the following now:
 	//   1. Store the newly simulated frame in the world state buffer.
