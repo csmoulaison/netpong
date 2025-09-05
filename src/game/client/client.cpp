@@ -72,7 +72,9 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	// If the states are equal, client side prediction was successful and we do not
 	// need to resimulate.
 	if(server_state->paddle_positions[0] == client_state->paddle_positions[0]
-	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]) {
+	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]
+	&& server_state->paddle_velocities[0] == client_state->paddle_velocities[0]
+	&& server_state->paddle_velocities[1] == client_state->paddle_velocities[1]) {
 		printf("Client: Matched frame %u, aborting simulation.\n", update_frame);
 		return;
 	}

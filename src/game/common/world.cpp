@@ -16,7 +16,7 @@ void world_init(World* world)
 {
 	for(u8 i = 0; i < 2; i++)
 	{
-		world->paddle_positions[i] = 0.5f;
+		world->paddle_positions[i] = 0.0f;
 		world->paddle_velocities[i] = 0.0f;
 		world->player_inputs[i].move_up = false;
 		world->player_inputs[i].move_down = false;
@@ -28,20 +28,29 @@ void world_init(World* world)
 // occurs on. Then we will trace it all the way through the system.
 void world_simulate(World* world, float dt)
 {
-	float speed = PADDLE_SPEED * dt;
-
 	for(u32 i = 0; i < 2; i++) {
 		PlayerInput* input = &world->player_inputs[i];
 
-		//if(input->move_up) {
-			//world->paddle_positions[i] = -world->paddle_positions[i];
-		//}
-
 		if(input->move_up) {
-			world->paddle_positions[i] += speed;
+			world->paddle_velocities[i] += PADDLE_ACCELERATION * dt;
 		}
 		if(input->move_down) {
-			world->paddle_positions[i] -= speed;
+			world->paddle_velocities[i] -= PADDLE_ACCELERATION * dt;
 		}
+
+		if(world->paddle_velocities[i] > 0) {
+			world->paddle_velocities[i] -= PADDLE_FRICTION * dt;
+		} else if(world->paddle_velocities[i] < 0) {
+			world->paddle_velocities[i] += PADDLE_FRICTION * dt;
+		}
+
+		if(world->paddle_velocities[i] > PADDLE_MAX_SPEED) {
+			world->paddle_velocities[i] = PADDLE_MAX_SPEED;
+		}
+		if(world->paddle_velocities[i] < -PADDLE_MAX_SPEED) {
+			world->paddle_velocities[i] = -PADDLE_MAX_SPEED;
+		}
+
+		world->paddle_positions[i] += world->paddle_velocities[i] * dt;
 	}
 }
