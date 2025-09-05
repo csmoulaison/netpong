@@ -1,7 +1,7 @@
 #ifndef renderer_h_INCLUDED
 #define renderer_h_INCLUDED
 
-#define RENDERER_NO_INTERPOLATION false
+#define RENDERER_NO_INTERPOLATION true
 #define RENDER_LIST_BOXES_MAX 10
 
 #include "base/base.h"

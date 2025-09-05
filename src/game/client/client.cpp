@@ -1,10 +1,15 @@
-#define WORLD_STATE_BUFFER_LEN 2048
+#define WORLD_STATE_BUFFER_SIZE 64
 
 #define FRAME_LENGTH_MOD 0.025f
 
-enum ClientState {
+enum ClientConnectionState {
 	CLIENT_STATE_CONNECTING,
 	CLIENT_STATE_CONNECTED
+};
+
+struct ClientWorldState {
+	i32 frame;
+	World world;
 };
 
 struct Client {
@@ -12,15 +17,13 @@ struct Client {
 	// local play.
 	PlatformSocket* socket;
 
-	u8 state;
+	ClientConnectionState connection_state;
 	u8 id;
 	bool close_requested;
 
 	// The buffer holds present and past states of the game simulation.
-	// The 0th element represents the oldest frame.
-	World world_states[WORLD_STATE_BUFFER_LEN];
-	u32 oldest_stored_frame;
-	u32 frame;
+	ClientWorldState states[WORLD_STATE_BUFFER_SIZE];
+	i32 frame;
 
 	double frame_length;
 
@@ -34,11 +37,10 @@ Client* client_init(Platform* platform, Arena* arena)
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
 	client->socket = platform_init_client_socket(arena);
-	client->state = CLIENT_STATE_CONNECTING;
+	client->connection_state = CLIENT_STATE_CONNECTING;
 	client->id = 0;
 	client->close_requested = false;
 
-	client->oldest_stored_frame = 0;
 	client->frame = 0;
 	client->frame_length = BASE_FRAME_LENGTH;
 
@@ -46,90 +48,56 @@ Client* client_init(Platform* platform, Arena* arena)
 	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
 	client->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
-	world_init(&client->world_states[client->frame]);
+	for(i32 i = 0; i < WORLD_STATE_BUFFER_SIZE; i++) {
+		client->states[i].frame = -1;
+
+		// TODO - Theoretically, we don't need to do this, eh? I just figured we might
+		// as well and figure out optimizations later.
+		client->states[i].world = {};
+		world_init(&client->states[i].world);
+	}
 
 	return client;
 }
 
-// NOW - Right now it looks like we are rolling back every update or something? It's inconsistent.
-// Sometimes, we are just staying put, sometimes rolling back. I'm not sure we are ever jumping
-// ahead. It's most obvious when the frame time is long and/or when the speed is high.
-//
-// When the debug display below is enabled, we see that the delta between the client present and
-// server update is growing and shrinking, as we would expect with our scheme. Best guess is that
-// this is correlated with our fluctuations in position, which means?
-// 
-// Best next step unless you can logic it out yourself is to write down the effects of the below
-// procedure on pen and paper, verifying that the logic leads to the frames we expect being processed,
-// then try to compare the actual world state values to what we would expect.
-//
-// If we are really in a pinch, we can also change the world model to make it easier to test this
-// behavior. Think of ways of essentializing the problem we are trying to solve. Maybe just
-// discretizing movement would do the trick.
 void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server_update)
 {
-	u32 DEBUG_oldest_stored = client->oldest_stored_frame;
-	
-	u32 server_frame = server_update->header.frame_number;
+	i32 update_frame = server_update->header.frame;
+	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
+	assert(client->states[update_frame_index].frame == update_frame);
 
+	World* client_state = &client->states[update_frame_index].world;
+	World* server_state = &server_update->world_state;
 
-	i32 oldest_to_server_frame_delta = server_frame - client->oldest_stored_frame;
-	client->oldest_stored_frame = server_frame;
-	assert(oldest_to_server_frame_delta >= 0);
-
-	for(u32 i = 0; i <= oldest_to_server_frame_delta; i++) {
-		client->world_states[i] = client->world_states[i + oldest_to_server_frame_delta];
-	}
-
-	// NOW cleanup. Works though. Need more scalable way of checking parity?
-	World* tmp_server = &server_update->world_state;
-	World* tmp_client = &client->world_states[0];
-	if(tmp_server->paddle_positions[0] != tmp_client->paddle_positions[0]
-	&& tmp_server->paddle_positions[1] != tmp_client->paddle_positions[1]) {
-		printf("Match frame: (%u)\n", server_update->header.frame_number);
+	// If the states are equal, client side prediction was successful and we do not
+	// need to resimulate.
+	if(server_state->paddle_positions[0] == client_state->paddle_positions[0]
+	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]) {
+		printf("Client: Matched frame %u, aborting simulation.\n", update_frame);
 		return;
 	}
 
-	//printf("\n   CLIENT   SERVER\n");
-	//printf("0: %.3f   %.3f\n", client->world_states[0].paddle_positions[0], server_update->world_state.paddle_positions[0]);
-	//printf("1: %.3f   %.3f\n", client->world_states[1].paddle_positions[0]);
-	//printf("2: %.3f   %.3f\n", client->world_states[2].paddle_positions[0]);
-	//printf("3: %.3f   %.3f\n", client->world_states[3].paddle_positions[0]);
-	//printf("4: %.3f   %.3f\n", client->world_states[4].paddle_positions[0]);
+	printf("Client: Unmatched frame %u, initiating simulation.\n", update_frame);
+	assert(client->frame - update_frame >= 0);
+	memcpy(client_state, server_state, sizeof(World));
 
-	memcpy(&client->world_states[0], &server_update->world_state, sizeof(World));
-	i32 server_to_present_frame_delta = client->frame - server_frame;
+	for(i32 i = update_frame + 1; i <= client->frame; i++) {
+		i32 prev_frame_index = (i - 1) % WORLD_STATE_BUFFER_SIZE;
+		i32 frame_index = i % WORLD_STATE_BUFFER_SIZE;
 
-	assert(server_to_present_frame_delta >= 0);
+		PlayerInput cached_player_input = client->states[frame_index].world.player_inputs[client->id];
+		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
 
-	for(u32 i = 1; i < server_to_present_frame_delta; i++) {
-		PlayerInput cached_player_input = client->world_states[i].player_inputs[client->id];
-
-		memcpy(&client->world_states[i], &client->world_states[i - 1], sizeof(World));
-
-		World* world = &client->world_states[i];
+		World* world = &client->states[frame_index].world;
 		world->player_inputs[client->id] = cached_player_input;
-		world_simulate(world, client->frame_length);
-	}
-
-	if(false) {
-		printf("\nRESOLVING STATE UPDATE\n======================\n");
-
-		printf("client present         ", client->frame); 
-		for(u32 i = 0; i < client->frame; i++) { printf("[ ]"); }; printf("[*]\n");
-
-		printf("oldest to server       ", server_frame);
-		for(u32 i = 0; i < DEBUG_oldest_stored; i++) { printf("[X]"); }; 
-		for(u32 i = 0; i < oldest_to_server_frame_delta; i++) { printf("[>]"); }; 
-		printf("\n");
-
-		printf("server update          ", server_frame);
-		for(u32 i = 0; i < server_frame; i++) { printf("[ ]"); }; printf("[*]\n");
-
-		printf("server to present      ", server_frame);
-		for(u32 i = 0; i < server_frame; i++) { printf("[ ]"); }; 
-		for(u32 i = 0; i < server_to_present_frame_delta; i++) { printf("[>]"); }; 
-		printf("\n");
+		// NOW - This is kind of a big huge thing I missed. The frame_length is being
+		// used here, and it's now often going to be different than in the case of the
+		// original simulation. For now, I disabled the frame slowing/speeding.
+		//
+		// If we re-enable it, I suspect the thing to do will be to store the frame
+		// length of the original client-side predicted simulation at the time of
+		// simulation, and reuse it here the same way we did with cached player input.
+		world_simulate(world, client->frame_length); 
 	}
 }
 
@@ -150,8 +118,8 @@ void client_process_packets(Client* client)
 			case SERVER_PACKET_JOIN_ACKNOWLEDGE:
 				acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
 				client->id = acknowledge_packet->client_id;
-				client->frame = acknowledge_packet->frame_number;
-				client->state = CLIENT_STATE_CONNECTED;
+				client->frame = acknowledge_packet->frame;
+				client->connection_state = CLIENT_STATE_CONNECTED;
 				printf("Recieved join acknowledgment from server.\n");
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
@@ -159,10 +127,10 @@ void client_process_packets(Client* client)
 				client_resolve_state_update(client, update_packet);
 				break;
 			case SERVER_PACKET_SPEED_UP:
-				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+				//client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			case SERVER_PACKET_SLOW_DOWN:
-				client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+				//client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			default: break;
 		}
@@ -196,57 +164,25 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
 {
-	// TODO - Eventually, do a ring buffer. Right now, if no reset is performed, we
-	// segfault after max buffered frames is reached. If not a ring buffer, I suppose
-	// we could do a dynamic array, but that's really kind of ridiculous. Honestly,
-	// maybe it's even better to just pause and wait for server response if we are
-	// at the max?
-	u32 frame_index = client->frame - client->oldest_stored_frame;
-	assert(frame_index < WORLD_STATE_BUFFER_LEN);
-	if(frame_index > 0) {
-		memcpy(&client->world_states[frame_index], &client->world_states[frame_index - 1], sizeof(World));
+	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
+	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
+	if(client->frame > 0) {
+		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
 	}
 
-	World* world = &client->world_states[frame_index];
-	float prev_paddle_pos = world->paddle_positions[0];
-
+	client->states[frame_index].frame = client->frame;
+	World* world = &client->states[frame_index].world;
 	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
 	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
-
 	world_simulate(world, client->frame_length);
 
-//	if(world->paddle_positions[0] > prev_paddle_pos) {
-//		printf("Client: Paddle  UP  (Frame %u)\n", client->frame);
-//	} else if(world->paddle_positions[0] < prev_paddle_pos) {
-//		printf("Client: Paddle DOWN (Frame %u)\n", client->frame);
-//	}
-
-	// We need to do the following now:
-	//   1. Store the newly simulated frame in the world state buffer.
-	//   2. Send a packet of this frame's input to the server.
-	//   3. Buffer client inputs on the server side, pulling from them every server
-	//      update. Once we do this we will want to see about properly syncing the
-	//      client and server times and what might be complex about that.
-	//      - This represents the only unknown at the moment, this problem of making
-	//        sure the client and server frame counters are synced up. Perhaps this
-	//        just isn't really a problem and computers are very time accurate.
-	//   4. Every server update, after pulling inputs from the client side, send the
-	//      authoritative state for that simulated frame back to the client.
-	//   5. On the client side, respond to these server update packets by doing the
-	//      following:
-	//      - Clear the buffer up to this most recent server frame, shifting that
-	//        one over to [0].
-	//      - Starting from this server frame, resimulate until you reach the
-	//        newest client frame, using the stored inputs as, well, input.
-	//      - Rinse and repeat.
-	// All this has been done, but with some incorrect stuff, as the notes explain.
 
 	// NOW - we also aren't sending a sliding window of inputs. Rewatch overwatch
 	// and then rocket league netcode part of talks.
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
 	input_packet.header.client_id = client->id;
-	input_packet.header.frame_number = client->frame;
+	input_packet.header.frame = client->frame;
 	input_packet.input_move_up = world->player_inputs[client->id].move_up;
 	input_packet.input_move_down = world->player_inputs[client->id].move_down;
 	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
@@ -268,12 +204,11 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 {
 	client_process_packets(client);
 	
-	switch(client->state) {
+	switch(client->connection_state) {
 		case CLIENT_STATE_CONNECTING:
 			// TODO - This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
-
 			client_update_connecting(client, platform, render_state);
 			break;
 		case CLIENT_STATE_CONNECTED:

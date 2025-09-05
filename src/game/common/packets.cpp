@@ -7,7 +7,7 @@ enum ClientPacketType {
 struct ClientPacketHeader {
 	ClientPacketType type;
 	u8 client_id;
-	i32 frame_number;
+	i32 frame;
 };
 
 struct ClientJoinPacket {
@@ -30,13 +30,13 @@ enum ServerPacketType {
 
 struct ServerPacketHeader {
 	ServerPacketType type;
-	u32 frame_number;
+	i32 frame;
 };
 
 struct ServerJoinAcknowledgePacket {
 	ServerPacketHeader header;
 	u8 client_id;
-	u32 frame_number;
+	i32 frame;
 };
 
 struct ServerStateUpdatePacket {
