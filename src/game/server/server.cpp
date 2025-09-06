@@ -122,6 +122,7 @@ void server_process_packets(Server* server)
 void server_update(Server* server, float delta_time)
 {
 	server_process_packets(server);
+	platform_update_sim_mode(server->socket, delta_time);
 
 	if(server->connected_clients_len > 0) {
 		// NOW - Hacky for now to make sure we've got some inputs.

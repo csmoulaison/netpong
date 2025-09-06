@@ -44,6 +44,10 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 		panic();
 	}
 
+#if NETWORK_SIM_MODE == true
+	platform_socket->sim_packets_len = 0;
+#endif
+
 	return platform_socket;
 }
 
@@ -71,16 +75,59 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	return platform_socket;
 }
 
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size) {
+// This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
+void xlib_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size)
+{
 	XlibSocket* sock = (XlibSocket*)socket->backend;
-
 	assert(connection_id < sock->connections_len);
 
 	struct sockaddr_in* server_address = &sock->connections[connection_id];
-	//printf("Packet sent: size %i, address %i %i %i\n", size, server_address->sin_family, server_address->sin_addr.s_addr, server_address->sin_port);
-
 	sendto(sock->descriptor, packet, size, MSG_CONFIRM, 
 		(struct sockaddr*)&sock->connections[connection_id], sizeof(struct sockaddr_in));
+}
+
+#if NETWORK_SIM_MODE == true
+
+void platform_update_sim_mode(PlatformSocket* socket, float dt) 
+{
+	for(i32 i = 0; i < socket->sim_packets_len; i++) {
+		SimPacket* sim_packet = &socket->sim_packets[i];
+		sim_packet->countdown -= dt;
+		if(sim_packet->countdown <= 0.0f) {
+			xlib_send_packet(socket, sim_packet->connection_id, sim_packet->packet, sim_packet->size);
+
+			if(i != socket->sim_packets_len - 1) {
+				memcpy(sim_packet, &socket->sim_packets[socket->sim_packets_len - 1], sizeof(SimPacket));
+				i--;
+			}
+			socket->sim_packets_len--;
+		}
+	}
+}
+
+#endif
+
+void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size) {
+#if NETWORK_SIM_MODE == true
+	if(random_float() < NETWORK_SIM_PACKET_LOSS_CHANCE) {
+		//printf("Artificial packet loss.\n");
+		return;
+	}
+
+	assert(socket->sim_packets_len + 1 < NETWORK_SIM_PACKET_BUFFER_SIZE);
+	SimPacket* sim_packet = &socket->sim_packets[socket->sim_packets_len];
+	socket->sim_packets_len++;
+
+	sim_packet->countdown = random_float() * NETWORK_SIM_LATENCY_AVERAGE_SECONDS + random_float() * NETWORK_SIM_LATENCY_VARIANCE_SECONDS;
+	sim_packet->connection_id = connection_id;
+	sim_packet->size = size;
+	sim_packet->packet = malloc(size);
+	memcpy(sim_packet->packet, packet, size);
+
+	return;
+#endif
+
+	xlib_send_packet(socket, connection_id, packet, size);
 }
 
 PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
@@ -100,8 +147,6 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 		// -1 means there are no more packets.
 		if(data_size != -1) { 
-			//printf("Packet received: size %i, address %i %i %i\n", data_size, sender_address.sin_family, sender_address.sin_addr.s_addr, sender_address.sin_port);
-
 			if(*current_packet != nullptr) {
 				(*current_packet)->next = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
 				current_packet = &(*current_packet)->next;
@@ -133,21 +178,22 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 					packet->connection_id = sock->connections_len;
 					sock->connections[sock->connections_len] = sender_address;
 					sock->connections_len++;
-					printf("add connection\n");
+					printf("Server: Add client connection.\n");
 				}
-			} else {
+			} else { // socket->type == SOCKET_TYPE_CLIENT
 				packet->connection_id = 0;
 			}
 			memcpy(packet->data, data, data_size);
 		} else {
-			//if((*current_packet) != nullptr) {
-			//	(*current_packet)->next = nullptr;
-			//}
 			return payload;
 		}
 	}
 
 	panic();
 }
+
+#if NETWORK_SIM_MODE == true
+
+#endif
 
 #endif // xlib_network_h_INCLUDED

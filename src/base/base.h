@@ -17,5 +17,6 @@
 #include "base/rect.h"
 #include "base/sizes.h"
 #include "base/interpolate.h"
+#include "base/random.h"
 
 #endif

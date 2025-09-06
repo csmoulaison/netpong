@@ -64,7 +64,12 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 {
 	i32 update_frame = server_update->header.frame;
 	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
-	assert(client->states[update_frame_index].frame == update_frame);
+
+	//assert(client->states[update_frame_index].frame == update_frame);
+	if(client->states[update_frame_index].frame != update_frame) {
+		printf("Frame != in resolution: client %u, server %u\n", client->states[update_frame_index].frame, update_frame);
+		panic();
+	}
 
 	World* client_state = &client->states[update_frame_index].world;
 	World* server_state = &server_update->world_state;
@@ -178,7 +183,6 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
 	world_simulate(world, client->frame_length);
 
-
 	// NOW - we also aren't sending a sliding window of inputs. Rewatch overwatch
 	// and then rocket league netcode part of talks.
 	ClientInputPacket input_packet = {};
@@ -205,6 +209,10 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
 	client_process_packets(client);
+	// TODO - It is certainly wrong to use client->frame_length for this, and we
+	// should certainly have a notion of delta time which is decoupled from the
+	// network tick.
+	platform_update_sim_mode(client->socket, client->frame_length);
 	
 	switch(client->connection_state) {
 		case CLIENT_STATE_CONNECTING:

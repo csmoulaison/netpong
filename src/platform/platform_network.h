@@ -7,6 +7,24 @@
 #define MAX_PAYLOAD_PACKETS 64
 #define MAX_PACKET_BYTES 2048
 
+#define NETWORK_SIM_MODE true
+
+#if NETWORK_SIM_MODE
+
+#define NETWORK_SIM_PACKET_BUFFER_SIZE 2048
+#define NETWORK_SIM_PACKET_LOSS_CHANCE 0.25f
+#define NETWORK_SIM_LATENCY_AVERAGE_SECONDS 0.005f
+#define NETWORK_SIM_LATENCY_VARIANCE_SECONDS 0.005f
+
+struct SimPacket {
+	float countdown;
+	i8 connection_id;
+	void* packet;
+	u32 size;
+};
+
+#endif
+
 enum SocketType {
 	SOCKET_TYPE_CLIENT,
 	SOCKET_TYPE_SERVER
@@ -15,6 +33,11 @@ enum SocketType {
 struct PlatformSocket {
 	SocketType type;
 	void* backend;
+
+#if NETWORK_SIM_MODE
+	SimPacket sim_packets[NETWORK_SIM_PACKET_BUFFER_SIZE];
+	i32 sim_packets_len;
+#endif
 };
 
 struct PlatformPacket {
@@ -44,5 +67,11 @@ void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet
 // The packets are stored in the passed memory arena, so the arena needs to be
 // freed or it's a memory leak.
 PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena);
+
+#if NETWORK_SIM_MODE
+
+void platform_update_sim_mode(PlatformSocket* socket, float dt);
+
+#endif
 
 #endif // platform_network_h_INCLUDED
