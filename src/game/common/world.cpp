@@ -7,7 +7,7 @@ struct World {
 	float paddle_positions[2];
 	float paddle_velocities[2];
 
-	// TODO - Separate inputs from world state. Makes a lot more sense, e.g. how
+	// TODO: Separate inputs from world state. Makes a lot more sense, e.g. how
 	// inputs are selectively overriden by the client when resolving state updates.
 	PlayerInput player_inputs[2];
 };
@@ -23,9 +23,6 @@ void world_init(World* world)
 	}
 }
 
-// NOW - we are going to simplify the simulation. a discrete button press, not a hold, will
-// determine whether a discrete movement occurs. The client will mark that and the frame it
-// occurs on. Then we will trace it all the way through the system.
 void world_simulate(World* world, float dt)
 {
 	for(u32 i = 0; i < 2; i++) {

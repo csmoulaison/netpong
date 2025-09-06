@@ -6,7 +6,9 @@
 #include "platform/platform_time.h"
 #include "renderer/renderer.h"
 
-// TODO - Rethink client/server/common split. It seems increasingly non-meaningful.
+// TODO: Rethink client/server/common split. I like it on an organizational level,
+// but is everything in its proper place?
+// Maybe write a quick list with justifications for each file's placement.
 #include "game/common/config.cpp"
 #include "game/common/world.cpp"
 #include "game/common/packets.cpp"

@@ -1,6 +1,6 @@
 #define WORLD_STATE_BUFFER_SIZE 64
 
-#define FRAME_LENGTH_MOD 0.025f
+#define FRAME_LENGTH_MOD 0.01f
 
 enum ClientConnectionState {
 	CLIENT_STATE_CONNECTING,
@@ -13,7 +13,7 @@ struct ClientWorldState {
 };
 
 struct Client {
-	// TODO - Probably abstract the platform socket away into a proxy socket for
+	// TODO: Probably abstract the platform socket away into a proxy socket for
 	// local play.
 	PlatformSocket* socket;
 
@@ -42,7 +42,7 @@ Client* client_init(Platform* platform, Arena* arena)
 	client->close_requested = false;
 
 	client->frame = 0;
-	client->frame_length = BASE_FRAME_LENGTH;
+	client->frame_length = BASE_FRAME_LENGTH - BASE_FRAME_LENGTH * FRAME_LENGTH_MOD;
 
 	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
@@ -51,7 +51,7 @@ Client* client_init(Platform* platform, Arena* arena)
 	for(i32 i = 0; i < WORLD_STATE_BUFFER_SIZE; i++) {
 		client->states[i].frame = -1;
 
-		// TODO - Theoretically, we don't need to do this, eh? I just figured we might
+		// TODO: Theoretically, we don't need to do this, eh? I just figured we might
 		// as well and figure out optimizations later.
 		client->states[i].world = {};
 		world_init(&client->states[i].world);
@@ -80,11 +80,11 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]
 	&& server_state->paddle_velocities[0] == client_state->paddle_velocities[0]
 	&& server_state->paddle_velocities[1] == client_state->paddle_velocities[1]) {
-		printf("Client: Matched frame %u, aborting simulation.\n", update_frame);
+		//printf("Client: Matched frame %u, aborting simulation.\n", update_frame);
 		return;
 	}
 
-	printf("Client: Unmatched frame %u, initiating simulation.\n", update_frame);
+	//printf("Client: Unmatched frame %u, initiating simulation.\n", update_frame);
 	assert(client->frame - update_frame >= 0);
 	memcpy(client_state, server_state, sizeof(World));
 
@@ -97,20 +97,47 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 
 		World* world = &client->states[frame_index].world;
 		world->player_inputs[client->id] = cached_player_input;
-		// NOW - This is kind of a big huge thing I missed. The frame_length is being
+
+		// TODO: This is kind of a big huge thing I missed. The frame_length is being
 		// used here, and it's now often going to be different than in the case of the
-		// original simulation. For now, I disabled the frame slowing/speeding.
-		//
-		// If we re-enable it, I suspect the thing to do will be to store the frame
-		// length of the original client-side predicted simulation at the time of
-		// simulation, and reuse it here the same way we did with cached player input.
+		// original simulation. We want to store the original frame length in each
+		// stored state after simulation, and reuse it the same way we currently reuse
+		// original inputs.
 		world_simulate(world, client->frame_length); 
 	}
 }
 
-void client_process_packets(Client* client)
+void client_simulate_frame(Client* client, Platform* platform)
 {
-	// TODO - this is dirty shit dude. arena_create should be able to allocate from
+	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
+	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
+	if(client->frame > 0) {
+		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
+	}
+
+	client->states[frame_index].frame = client->frame;
+	//printf("Simulating frame: %i\n", client->frame);
+	World* world = &client->states[frame_index].world;
+	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
+	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
+	world_simulate(world, client->frame_length);
+
+	// TODO: Send sliding window of inputs so that the server can check for holes
+	// in what it has received.
+	ClientInputPacket input_packet = {};
+	input_packet.header.type = CLIENT_PACKET_INPUT;
+	input_packet.header.client_id = client->id;
+	input_packet.header.frame = client->frame;
+	input_packet.input_move_up = world->player_inputs[client->id].move_up;
+	input_packet.input_move_down = world->player_inputs[client->id].move_down;
+	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
+
+	client->frame++;
+}
+
+void client_process_packets(Client* client, Platform* platform)
+{
+	// TODO: this is dirty shit dude. arena_create should be able to allocate from
 	// an existing arena
 	Arena packet_arena = arena_create(4096);
 	PlatformPayload payload = platform_receive_packets(client->socket,&packet_arena);
@@ -118,26 +145,43 @@ void client_process_packets(Client* client)
 
 	while(packet != nullptr) {
 		ServerPacketHeader* header = (ServerPacketHeader*)packet->data;
-		ServerJoinAcknowledgePacket* acknowledge_packet;
+		ServerJoinAcknowledgePacket* server_acknowledge_packet;
 		ServerStateUpdatePacket* update_packet;
+
+		ClientJoinAcknowledgePacket client_acknowledge_packet;
 
 		switch(header->type) {
 			case SERVER_PACKET_JOIN_ACKNOWLEDGE:
-				acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
-				client->id = acknowledge_packet->client_id;
-				client->frame = acknowledge_packet->frame;
+				if(client->connection_state == CLIENT_STATE_CONNECTED) {
+					break;
+				}
+
+				server_acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
+				client->id = server_acknowledge_packet->client_id;
+				client->frame = server_acknowledge_packet->frame;
 				client->connection_state = CLIENT_STATE_CONNECTED;
 				printf("Recieved join acknowledgment from server.\n");
+
+				client_acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
+				client_acknowledge_packet.header.client_id = client->id;
+				client_acknowledge_packet.header.frame = client->frame;
+				platform_send_packet(client->socket, 0, &client_acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
+
+				//for(i32 i = 0; i < 5; i++) {
+				//	client_simulate_frame(client, platform);
+				//}
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
 				update_packet = (ServerStateUpdatePacket*)packet->data;
 				client_resolve_state_update(client, update_packet);
 				break;
 			case SERVER_PACKET_SPEED_UP:
-				//client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+				printf("SPEED\n");
+				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			case SERVER_PACKET_SLOW_DOWN:
-				//client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+				printf("SLOW\n");
+				client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			default: break;
 		}
@@ -171,27 +215,11 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
 {
-	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
-	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
-	if(client->frame > 0) {
-		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
-	}
+	client_simulate_frame(client, platform);
 
-	client->states[frame_index].frame = client->frame;
+	// TODO: Probably make a utility function.
+	i32 frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
 	World* world = &client->states[frame_index].world;
-	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
-	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
-	world_simulate(world, client->frame_length);
-
-	// NOW - we also aren't sending a sliding window of inputs. Rewatch overwatch
-	// and then rocket league netcode part of talks.
-	ClientInputPacket input_packet = {};
-	input_packet.header.type = CLIENT_PACKET_INPUT;
-	input_packet.header.client_id = client->id;
-	input_packet.header.frame = client->frame;
-	input_packet.input_move_up = world->player_inputs[client->id].move_up;
-	input_packet.input_move_down = world->player_inputs[client->id].move_down;
-	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
 
 	// Render
 	render_state->boxes_len = 2;
@@ -208,22 +236,24 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 // separately, but that's feeling a little icky.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
-	client_process_packets(client);
-	// TODO - It is certainly wrong to use client->frame_length for this, and we
+	client_process_packets(client, platform);
+
+#if NETWORK_SIM_MODE
+	// TODO: It is certainly wrong to use client->frame_length for this, and we
 	// should certainly have a notion of delta time which is decoupled from the
 	// network tick.
 	platform_update_sim_mode(client->socket, client->frame_length);
+#endif
 	
 	switch(client->connection_state) {
 		case CLIENT_STATE_CONNECTING:
-			// TODO - This is just for the blinky thing. Dumb reason to have it here but
+			// TODO: This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
 			client_update_connecting(client, platform, render_state);
 			break;
 		case CLIENT_STATE_CONNECTED:
 			client_update_connected(client, platform, render_state);
-			client->frame++;
 			break;
 		default: break;
 	}

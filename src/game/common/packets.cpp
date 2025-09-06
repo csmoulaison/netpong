@@ -1,6 +1,7 @@
 // Client packets
 enum ClientPacketType {
 	CLIENT_PACKET_JOIN,
+	CLIENT_PACKET_JOIN_ACKNOWLEDGE,
 	CLIENT_PACKET_INPUT
 };
 
@@ -11,6 +12,10 @@ struct ClientPacketHeader {
 };
 
 struct ClientJoinPacket {
+	ClientPacketHeader header;
+};
+
+struct ClientJoinAcknowledgePacket {
 	ClientPacketHeader header;
 };
 
@@ -37,6 +42,7 @@ struct ServerJoinAcknowledgePacket {
 	ServerPacketHeader header;
 	u8 client_id;
 	i32 frame;
+	World world_state;
 };
 
 struct ServerStateUpdatePacket {
