@@ -48,6 +48,7 @@ i32 main(i32 argc, char** argv)
 			platform_update(platform, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
+			*current_render_state = {};
 			client_update(client, platform, current_render_state);
 
 			if(first_frame) {

@@ -38,24 +38,13 @@ struct Server {
 	ServerConnection connections[MAX_CLIENTS];
 	u8 connections_len;
 
-	// NOW: << THIS: The true source of our issues wasn't really what we thought
-	// it was. It was really mostly just that the precision of the tick times
-	// between the server and client isn't good enough relative to the tick settings
-	// we had in place. This issue has been fixed, in part by tweaking the numbers,
-	// but primarily by allowing for the client to fall behind, and simply using it
-	// as a trigger for an immediate speed up on the client side, as well as
-	// immediate simulation up to the received server frame.
-	//
-	// The point is, now I'm not sure I see much of a need for the pending/active
-	// connection stuff.
-	//
-	// Also, at any rate, after that's gone(?) I think it is perhaps finally time
-	// to implement:
-	// 1. Ball physics
-	// 2. Game restart on win
-	// 3. Disconnection and time out on both client and server side
-	// 4. Visual smoothing for mispredictions
-	// 5. AND cleanup/comb for issues line by line
+	// TODO: It is time to implement:
+	// - NOW: aspect ratio handling
+	// - Ball + bounce
+	// - Game restart on win
+	// - Disconnection and time out on both client and server side
+	// - Visual smoothing for mispredictions
+	// - AND cleanup/comb for issues line by line
 };
 
 Server* server_init(Arena* arena)

@@ -192,6 +192,19 @@ void client_process_packets(Client* client, Platform* platform)
 	arena_destroy(&packet_arena);
 }
 
+void client_render_box(RenderState* render_state, Rect box, Platform* platform)
+{
+	float x_scale = (float)platform->window_height / platform->window_width;
+
+	Rect* rect = &render_state->boxes[render_state->boxes_len];
+	render_state->boxes_len += 1;
+
+	rect->x = box.x * x_scale;
+	rect->y = box.y;
+	rect->w = box.w;
+	rect->h = box.h;
+}
+
 void client_update_connecting(Client* client, Platform* platform, RenderState* render_state)
 {
 	ClientJoinPacket join_packet;
@@ -199,18 +212,18 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 	platform_send_packet(client->socket, 0, (void*)&join_packet, sizeof(ClientJoinPacket));
 
 	// Render "connecting" indicator.
-	render_state->boxes_len = 2;
 	for(u8 i = 0; i < 2; i++) {
 		float xoff = -1000.0f;
 		if((client->frame / 60) % 3 == 0) {
 			xoff = 0.0f;
 		}
-		
-		Rect* box = &render_state->boxes[i];
-		box->x = -0.75f + xoff;
-		box->y = 0.75f;
-		box->w = 0.025f;
-		box->h = 0.025f;
+	
+		Rect box;
+		box.x = -0.75f + xoff;
+		box.y = 0.75f;
+		box.w = 0.025f;
+		box.h = 0.025f;
+		client_render_box(render_state, box, platform);
 	}
 }
 
@@ -223,13 +236,13 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	World* world = &client->states[frame_index].world;
 
 	// Render
-	render_state->boxes_len = 2;
 	for(u8 i = 0; i < 2; i++) {
-		Rect* box = &render_state->boxes[i];
-		box->x = -0.75f + i * 1.5f;
-		box->y = world->paddle_positions[i];
-		box->w = 0.025f;
-		box->h = 0.1f;
+		Rect box;
+		box.x = -0.9f + i * 1.8f;
+		box.y = world->paddle_positions[i];
+		box.w = 0.025f;
+		box.h = 0.1f;
+		client_render_box(render_state, box, platform);
 	}
 }
 
