@@ -56,23 +56,6 @@ struct Server {
 	// 3. Disconnection and time out on both client and server side
 	// 4. Visual smoothing for mispredictions
 	// 5. AND cleanup/comb for issues line by line
-
-	// The following arrays are both lookup tables into the list of
-	// ServerConnections ("connections"). The index into "connections" is also the
-	// index into the platform-side connection list.
-	// 
-	// In the future, the platform/server-side indices may be decoupled, which
-	// would mean another lookup table.
-
-	// Lookup table of connections from which we have NOT yet received a join
-	// acknowledgement packet.
-	i32 pending_connections[MAX_CLIENTS];
-	u8 pending_connections_len;
-
-	// Lookup table of connections from which we HAVE received a join
-	// acknowledgement packet. We are actively sending update packets to these.
-	i32 active_connections[MAX_CLIENTS];
-	u8 active_connections_len;
 };
 
 Server* server_init(Arena* arena)
@@ -81,10 +64,7 @@ Server* server_init(Arena* arena)
 	server->socket = platform_init_server_socket(arena);
 	server->frame = 0;
 
-	server->pending_connections_len = 0;
-	server->active_connections_len = 0;
 	server->connections_len = 0;
-
 	for(u8 i = 0; i < MAX_CLIENTS; i++) {
 		ServerConnection* client = &server->connections[i];
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -131,27 +111,7 @@ void server_process_packets(Server* server)
 				if(connection_id == server->connections_len) {
 					printf("Acknowledging client join, adding client: %d\n", connection_id);
 					server->connections_len++;
-
-					server->pending_connections[server->pending_connections_len] = connection_id;
-					server->pending_connections_len++;
 				}
-				break;
-			case CLIENT_PACKET_JOIN_ACKNOWLEDGE: 
-				for(u8 i = 0; i < server->pending_connections_len; i++) {
-					if(server->pending_connections[i] == connection_id) {
-						server->active_connections[server->active_connections_len] = server->pending_connections[i];
-						server->active_connections_len++;
-
-						if(i < server->pending_connections_len - 1) {
-							server->pending_connections[i] = server->pending_connections[server->pending_connections_len - 1];
-						}
-						server->pending_connections_len--;
-
-						printf("Received client acknowledgement, activating client: %d. len: %d\n", connection_id, server->active_connections_len);
-						break;
-					}
-				}
-
 				break;
 			case CLIENT_PACKET_INPUT:
 				input_packet = (ClientInputPacket*)packet->data;
@@ -178,8 +138,8 @@ void server_update(Server* server, float delta_time)
 	platform_update_sim_mode(server->socket, delta_time);
 #endif
 
-	for(i8 i = 0; i < server->active_connections_len; i++) {
-		ServerConnection* client = &server->connections[server->active_connections[i]];
+	for(i8 i = 0; i < server->connections_len; i++) {
+		ServerConnection* client = &server->connections[i];
 		i32 latest_frame = 0;
 
 		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -203,9 +163,9 @@ void server_update(Server* server, float delta_time)
 		}
 	}
 
-	if(server->active_connections_len > 0) {
-		for(u8 i = 0; i < server->active_connections_len; i++) {
-			ServerConnection* client = &server->connections[server->active_connections[i]];
+	if(server->connections_len > 0) {
+		for(u8 i = 0; i < server->connections_len; i++) {
+			ServerConnection* client = &server->connections[i];
 
 			i32 last_input_frame = server->frame;
 			while(client->inputs[last_input_frame % INPUT_BUFFER_SIZE].frame != last_input_frame) {
@@ -229,16 +189,6 @@ void server_update(Server* server, float delta_time)
 			}
 		}
 
-		if(false) {
-			printf("Server: Simulating frame: %i\n", server->frame);
-			if(server->frame == 0) {
-				s_t0 = platform_time_in_seconds();
-			} else  if(server->frame == 8) {
-				printf("Server delta(0,8) = %f\n", platform_time_in_seconds() - s_t0);
-				exit(0);
-			}
-		}
-
 		world_simulate(&server->world, delta_time);
 
 		ServerStateUpdatePacket update_packet = {};
@@ -246,8 +196,8 @@ void server_update(Server* server, float delta_time)
 		update_packet.header.frame = server->frame;
 		update_packet.world_state = server->world;
 
-		for(u8 i = 0; i < server->active_connections_len; i++) {
-			platform_send_packet(server->socket, server->active_connections[i], &update_packet, sizeof(ServerStateUpdatePacket));
+		for(u8 i = 0; i < server->connections_len; i++) {
+			platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
 		}
 
 		server->frame++;

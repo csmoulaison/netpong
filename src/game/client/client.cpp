@@ -2,11 +2,8 @@
 
 #define FRAME_LENGTH_MOD 0.02f
 
-double c_t0;
-
 enum ClientConnectionState {
 	CLIENT_STATE_CONNECTING,
-	CLIENT_STATE_PENDING,
 	CLIENT_STATE_CONNECTED
 };
 
@@ -65,16 +62,6 @@ Client* client_init(Platform* platform, Arena* arena)
 
 void client_simulate_frame(Client* client, Platform* platform)
 {
-	if(false) {
-		printf("Client: Simulating frame: %i\n", client->frame);
-		if(client->frame == 0) {
-			c_t0 = platform_time_in_seconds();
-		} else  if(client->frame == 8) {
-			printf("Client delta(0,8) = %f\n", platform_time_in_seconds() - c_t0);
-			exit(0);
-		}
-	}
-
 	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
 	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
 	if(client->frame > 0) {
@@ -172,7 +159,7 @@ void client_process_packets(Client* client, Platform* platform)
 				server_acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
 				client->id = server_acknowledge_packet->client_id;
 				client->frame = server_acknowledge_packet->frame;
-				client->connection_state = CLIENT_STATE_PENDING;
+				client->connection_state = CLIENT_STATE_CONNECTED;
 				client->states[client->frame % WORLD_STATE_BUFFER_SIZE].world = server_acknowledge_packet->world_state;
 				printf("Recieved join acknowledgment from server.\n");
 
@@ -187,10 +174,6 @@ void client_process_packets(Client* client, Platform* platform)
 
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
-				if(client->connection_state == CLIENT_STATE_PENDING) {
-					printf("Client: Connected!\n");
-				}
-				client->connection_state = CLIENT_STATE_CONNECTED;
 				update_packet = (ServerStateUpdatePacket*)packet->data;
 				client_resolve_state_update(client, update_packet, platform);
 				break;
@@ -231,25 +214,6 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 	}
 }
 
-void client_update_pending(Client* client, Platform* platform, RenderState* render_state)
-{
-	ClientJoinAcknowledgePacket acknowledge_packet;
-	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
-	platform_send_packet(client->socket, 0, (void*)&acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
-	printf("Client: Sent join acknowledgement\n");
-
-	client_simulate_frame(client, platform);
-
-	render_state->boxes_len = 2;
-	for(u8 i = 0; i < 2; i++) {
-		Rect* box = &render_state->boxes[i];
-		box->x = -200.0f;
-		box->y = 0.0f;
-		box->w = 0.0f;
-		box->h = 0.0f;
-	}
-}
-
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
 {
 	client_simulate_frame(client, platform);
@@ -287,9 +251,6 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 			// TODO: This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
-			client_update_connecting(client, platform, render_state);
-			break;
-		case CLIENT_STATE_PENDING:
 			client_update_connecting(client, platform, render_state);
 			break;
 		case CLIENT_STATE_CONNECTED:
