@@ -1,9 +1,12 @@
 #define WORLD_STATE_BUFFER_SIZE 64
 
-#define FRAME_LENGTH_MOD 0.01f
+#define FRAME_LENGTH_MOD 0.02f
+
+double c_t0;
 
 enum ClientConnectionState {
 	CLIENT_STATE_CONNECTING,
+	CLIENT_STATE_PENDING,
 	CLIENT_STATE_CONNECTED
 };
 
@@ -42,7 +45,7 @@ Client* client_init(Platform* platform, Arena* arena)
 	client->close_requested = false;
 
 	client->frame = 0;
-	client->frame_length = BASE_FRAME_LENGTH - BASE_FRAME_LENGTH * FRAME_LENGTH_MOD;
+	client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 
 	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
@@ -60,15 +63,55 @@ Client* client_init(Platform* platform, Arena* arena)
 	return client;
 }
 
-void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server_update)
+void client_simulate_frame(Client* client, Platform* platform)
+{
+	if(false) {
+		printf("Client: Simulating frame: %i\n", client->frame);
+		if(client->frame == 0) {
+			c_t0 = platform_time_in_seconds();
+		} else  if(client->frame == 8) {
+			printf("Client delta(0,8) = %f\n", platform_time_in_seconds() - c_t0);
+			exit(0);
+		}
+	}
+
+	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
+	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
+	if(client->frame > 0) {
+		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
+	}
+
+	client->states[frame_index].frame = client->frame;
+	World* world = &client->states[frame_index].world;
+	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
+	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
+	world_simulate(world, client->frame_length);
+
+	// TODO: Send sliding window of inputs so that the server can check for holes
+	// in what it has received.
+	ClientInputPacket input_packet = {};
+	input_packet.header.type = CLIENT_PACKET_INPUT;
+	input_packet.header.client_id = client->id;
+	input_packet.header.frame = client->frame;
+	input_packet.input_move_up = world->player_inputs[client->id].move_up;
+	input_packet.input_move_down = world->player_inputs[client->id].move_down;
+	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
+
+	client->frame++;
+}
+
+void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server_update, Platform* platform)
 {
 	i32 update_frame = server_update->header.frame;
 	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
 
 	//assert(client->states[update_frame_index].frame == update_frame);
 	if(client->states[update_frame_index].frame != update_frame) {
-		printf("Frame != in resolution: client %u, server %u\n", client->states[update_frame_index].frame, update_frame);
-		panic();
+		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client->states[update_frame_index].frame, update_frame);
+		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+		while(client->frame < update_frame + 1) {
+			client_simulate_frame(client, platform);
+		}
 	}
 
 	World* client_state = &client->states[update_frame_index].world;
@@ -80,11 +123,9 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]
 	&& server_state->paddle_velocities[0] == client_state->paddle_velocities[0]
 	&& server_state->paddle_velocities[1] == client_state->paddle_velocities[1]) {
-		//printf("Client: Matched frame %u, aborting simulation.\n", update_frame);
 		return;
 	}
 
-	//printf("Client: Unmatched frame %u, initiating simulation.\n", update_frame);
 	assert(client->frame - update_frame >= 0);
 	memcpy(client_state, server_state, sizeof(World));
 
@@ -107,34 +148,6 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	}
 }
 
-void client_simulate_frame(Client* client, Platform* platform)
-{
-	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
-	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
-	if(client->frame > 0) {
-		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
-	}
-
-	client->states[frame_index].frame = client->frame;
-	//printf("Simulating frame: %i\n", client->frame);
-	World* world = &client->states[frame_index].world;
-	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
-	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
-	world_simulate(world, client->frame_length);
-
-	// TODO: Send sliding window of inputs so that the server can check for holes
-	// in what it has received.
-	ClientInputPacket input_packet = {};
-	input_packet.header.type = CLIENT_PACKET_INPUT;
-	input_packet.header.client_id = client->id;
-	input_packet.header.frame = client->frame;
-	input_packet.input_move_up = world->player_inputs[client->id].move_up;
-	input_packet.input_move_down = world->player_inputs[client->id].move_down;
-	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
-
-	client->frame++;
-}
-
 void client_process_packets(Client* client, Platform* platform)
 {
 	// TODO: this is dirty shit dude. arena_create should be able to allocate from
@@ -152,14 +165,15 @@ void client_process_packets(Client* client, Platform* platform)
 
 		switch(header->type) {
 			case SERVER_PACKET_JOIN_ACKNOWLEDGE:
-				if(client->connection_state == CLIENT_STATE_CONNECTED) {
+				if(client->connection_state != CLIENT_STATE_CONNECTING) {
 					break;
 				}
 
 				server_acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
 				client->id = server_acknowledge_packet->client_id;
 				client->frame = server_acknowledge_packet->frame;
-				client->connection_state = CLIENT_STATE_CONNECTED;
+				client->connection_state = CLIENT_STATE_PENDING;
+				client->states[client->frame % WORLD_STATE_BUFFER_SIZE].world = server_acknowledge_packet->world_state;
 				printf("Recieved join acknowledgment from server.\n");
 
 				client_acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
@@ -167,20 +181,25 @@ void client_process_packets(Client* client, Platform* platform)
 				client_acknowledge_packet.header.frame = client->frame;
 				platform_send_packet(client->socket, 0, &client_acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
 
-				//for(i32 i = 0; i < 5; i++) {
-				//	client_simulate_frame(client, platform);
-				//}
+				for(i8 i = 0; i < 6; i++) {
+					client_simulate_frame(client, platform);
+				}
+
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
+				if(client->connection_state == CLIENT_STATE_PENDING) {
+					printf("Client: Connected!\n");
+				}
+				client->connection_state = CLIENT_STATE_CONNECTED;
 				update_packet = (ServerStateUpdatePacket*)packet->data;
-				client_resolve_state_update(client, update_packet);
+				client_resolve_state_update(client, update_packet, platform);
 				break;
 			case SERVER_PACKET_SPEED_UP:
-				printf("SPEED\n");
+				//printf("SPEED\n");
 				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			case SERVER_PACKET_SLOW_DOWN:
-				printf("SLOW\n");
+				//printf("SLOW\n");
 				client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			default: break;
@@ -192,7 +211,6 @@ void client_process_packets(Client* client, Platform* platform)
 
 void client_update_connecting(Client* client, Platform* platform, RenderState* render_state)
 {
-	// Keep sending join packet until we get an acknowledgement.
 	ClientJoinPacket join_packet;
 	join_packet.header.type = CLIENT_PACKET_JOIN;
 	platform_send_packet(client->socket, 0, (void*)&join_packet, sizeof(ClientJoinPacket));
@@ -210,6 +228,25 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 		box->y = 0.75f;
 		box->w = 0.025f;
 		box->h = 0.025f;
+	}
+}
+
+void client_update_pending(Client* client, Platform* platform, RenderState* render_state)
+{
+	ClientJoinAcknowledgePacket acknowledge_packet;
+	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
+	platform_send_packet(client->socket, 0, (void*)&acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
+	printf("Client: Sent join acknowledgement\n");
+
+	client_simulate_frame(client, platform);
+
+	render_state->boxes_len = 2;
+	for(u8 i = 0; i < 2; i++) {
+		Rect* box = &render_state->boxes[i];
+		box->x = -200.0f;
+		box->y = 0.0f;
+		box->w = 0.0f;
+		box->h = 0.0f;
 	}
 }
 
@@ -250,6 +287,9 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 			// TODO: This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
+			client_update_connecting(client, platform, render_state);
+			break;
+		case CLIENT_STATE_PENDING:
 			client_update_connecting(client, platform, render_state);
 			break;
 		case CLIENT_STATE_CONNECTED:

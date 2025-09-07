@@ -11,20 +11,15 @@
 // 6. Clients running far ahead of server due to speed up packets not being
 //    reversed in time.
 
+double s_t0;
+
 struct ClientInput {
 	// So that we can tell if a certain frame has been received yet.
 	i32 frame;
 	PlayerInput input;
 };
 
-struct ConnectedClient {
-	// NOW: Keep ID here, which will require decoupling two things that are
-	// currently coupled with this ID.
-	// 1. The list of connected clients on the platform side.
-	// 2. The index into the connected_clients list.
-	// Right now, this id will be used to allow pending_clients to be moved to
-	// the right place on connected_clients.
-	i32 id;
+struct ServerConnection {
 	ClientInput inputs[INPUT_BUFFER_SIZE];
 };
 
@@ -39,50 +34,45 @@ struct Server {
 	// INPUT_BUFFER_SIZE % Server.frame = The client input associated with the
 	// current simulation frame.
 	i32 frame;
-	i32 latest_frame_received;
 
-	ConnectedClient connected_clients[MAX_CLIENTS];
-	u32 connected_clients_len;
+	ServerConnection connections[MAX_CLIENTS];
+	u8 connections_len;
 
-	// NOW: << THIS: Currently, our goal is to split connected_clients into those
-	// which have acknowledged the server join and those who haven't.
-	// Why? In order to allow the client to get some frames simulated before it
-	// receives any server update packets. The server will only send update packets
-	// to those who have joined.
-	// So: we want the flow to look like this from the server perspective:
-	// 1. Receive join request, send back acknowledgement and add ID to pending_clients.
-	// 2. While waiting for client acknowledgement, only send updates to those on
-	//    the connected_clients list. Not sure if we care about buffering inputs from
-	//    pending clients.
-	// 3. Receive client join acknowledgement. Move that client to the
-	//    connected_clients list, mem copying data if necessary.
+	// NOW: << THIS: The true source of our issues wasn't really what we thought
+	// it was. It was really mostly just that the precision of the tick times
+	// between the server and client isn't good enough relative to the tick settings
+	// we had in place. This issue has been fixed, in part by tweaking the numbers,
+	// but primarily by allowing for the client to fall behind, and simply using it
+	// as a trigger for an immediate speed up on the client side, as well as
+	// immediate simulation up to the received server frame.
 	//
-	// We just tried putting a bool on the connected_clients list in order to
-	// differentiate these two, but I don't want to have to check that bool everywhere
-	// connected_clients is used, hence the two lists. However, keep in mind that
-	// all the logic you'll find concerning pending clients is still referencing
-	// this old bool scheme, so we are in the process of transitioning that over.
+	// The point is, now I'm not sure I see much of a need for the pending/active
+	// connection stuff.
 	//
-	// The next state for the codebase will be the pending_clients list holding
-	// clients, and then being copied over to the connected_clients list on
-	// acknowledge, using the stored ConnectedClient.id in order to know where to
-	// put it.
-	//
-	// What comes after that will depend on what data we actually need for both
-	// of these lists, whether they are equivalent. If they both need the same data
-	// (i.e. ClientInput[] buffer), the natural thing to do would be to have an
-	// array of ConnectedClients, with two separate lookup tables holding indices
-	// into that ConnectedClients list. This is most likely what ends up happening.
+	// Also, at any rate, after that's gone(?) I think it is perhaps finally time
+	// to implement:
+	// 1. Ball physics
+	// 2. Game restart on win
+	// 3. Disconnection and time out on both client and server side
+	// 4. Visual smoothing for mispredictions
+	// 5. AND cleanup/comb for issues line by line
 
-	// NOW: Right now, this last has to be checked in order to give the player
-	// a client id. We are clumsily handling this as this only actually matters in
-	// the case of players disconnecting or more than two players, which we aren't
-	// concerned with right now. Storing the client ID seperately in
-	// connected_clients will go along with cleaning this up.
+	// The following arrays are both lookup tables into the list of
+	// ServerConnections ("connections"). The index into "connections" is also the
+	// index into the platform-side connection list.
 	// 
-	// List of clients which haven't acknowledged the server join yet.
-	ConnectedClient pending_clients[MAX_CLIENTS];
-	u32 pending_clients_len;
+	// In the future, the platform/server-side indices may be decoupled, which
+	// would mean another lookup table.
+
+	// Lookup table of connections from which we have NOT yet received a join
+	// acknowledgement packet.
+	i32 pending_connections[MAX_CLIENTS];
+	u8 pending_connections_len;
+
+	// Lookup table of connections from which we HAVE received a join
+	// acknowledgement packet. We are actively sending update packets to these.
+	i32 active_connections[MAX_CLIENTS];
+	u8 active_connections_len;
 };
 
 Server* server_init(Arena* arena)
@@ -90,11 +80,13 @@ Server* server_init(Arena* arena)
 	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
 	server->socket = platform_init_server_socket(arena);
 	server->frame = 0;
-	server->latest_frame_received = 0;
 
-	server->connected_clients_len = 0;
+	server->pending_connections_len = 0;
+	server->active_connections_len = 0;
+	server->connections_len = 0;
+
 	for(u8 i = 0; i < MAX_CLIENTS; i++) {
-		ConnectedClient* client;
+		ServerConnection* client = &server->connections[i];
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			client->inputs[j].frame = -1;
 			client->inputs[j].input = {};
@@ -123,13 +115,12 @@ void server_process_packets(Server* server)
 
 		ServerJoinAcknowledgePacket server_acknowledge_packet;
 		ClientInputPacket* input_packet;
-		ConnectedClient* client;
+		ServerConnection* client;
 		ClientInput* buffer_input;
 
 		switch(header->type) {
 			case CLIENT_PACKET_JOIN:
-				assert(connection_id <= server->connected_clients_len);
-				printf("Acknowledging client join.\n");
+				assert(connection_id <= server->connections_len);
 
 				server_acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
 				server_acknowledge_packet.client_id = connection_id;
@@ -137,21 +128,34 @@ void server_process_packets(Server* server)
 				server_acknowledge_packet.world_state = server->world;
 				platform_send_packet(server->socket, connection_id, (void*)&server_acknowledge_packet, sizeof(ServerJoinAcknowledgePacket));
 
-				if(connection_id == server->connected_clients_len) {
-					server->connected_clients[connection_id].client_acknowledged = false;
-					server->connected_clients_len++;
+				if(connection_id == server->connections_len) {
+					printf("Acknowledging client join, adding client: %d\n", connection_id);
+					server->connections_len++;
+
+					server->pending_connections[server->pending_connections_len] = connection_id;
+					server->pending_connections_len++;
 				}
 				break;
-			case CLIENT_PACKET_JOIN_ACKNOWLEDGE:
-				server->connected_clients[connection_id].client_acknowledged = true;
+			case CLIENT_PACKET_JOIN_ACKNOWLEDGE: 
+				for(u8 i = 0; i < server->pending_connections_len; i++) {
+					if(server->pending_connections[i] == connection_id) {
+						server->active_connections[server->active_connections_len] = server->pending_connections[i];
+						server->active_connections_len++;
+
+						if(i < server->pending_connections_len - 1) {
+							server->pending_connections[i] = server->pending_connections[server->pending_connections_len - 1];
+						}
+						server->pending_connections_len--;
+
+						printf("Received client acknowledgement, activating client: %d. len: %d\n", connection_id, server->active_connections_len);
+						break;
+					}
+				}
+
 				break;
 			case CLIENT_PACKET_INPUT:
 				input_packet = (ClientInputPacket*)packet->data;
-				client = &server->connected_clients[header->client_id];
-
-				if(server->latest_frame_received < input_packet->header.frame) {
-					server->latest_frame_received = input_packet->header.frame;
-				}
+				client = &server->connections[header->client_id];
 
 				buffer_input = &client->inputs[input_packet->header.frame % INPUT_BUFFER_SIZE];
 				buffer_input->frame = input_packet->header.frame;
@@ -174,8 +178,8 @@ void server_update(Server* server, float delta_time)
 	platform_update_sim_mode(server->socket, delta_time);
 #endif
 
-	for(i8 i = 0; i < server->connected_clients_len; i++) {
-		ConnectedClient* client = &server->connected_clients[i];
+	for(i8 i = 0; i < server->active_connections_len; i++) {
+		ServerConnection* client = &server->connections[server->active_connections[i]];
 		i32 latest_frame = 0;
 
 		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -199,28 +203,39 @@ void server_update(Server* server, float delta_time)
 		}
 	}
 
-	if(server->connected_clients_len > 0) {
-		for(u8 i = 0; i < server->connected_clients_len; i++) {
-			ConnectedClient* client = &server->connected_clients[i];
+	if(server->active_connections_len > 0) {
+		for(u8 i = 0; i < server->active_connections_len; i++) {
+			ServerConnection* client = &server->connections[server->active_connections[i]];
 
 			i32 last_input_frame = server->frame;
 			while(client->inputs[last_input_frame % INPUT_BUFFER_SIZE].frame != last_input_frame) {
 				last_input_frame--;
 				if(last_input_frame <= 0) {
-					printf("Server: No inputs yet from client %u.\n", i);
+					//printf("Server: No inputs yet from client %u.\n", i);
 					last_input_frame = 0;
 					break;
 				}
-
-				// TODO: This is a client timeout. We should just disconnect the client here.
-				if(server->frame - last_input_frame > INPUT_BUFFER_SIZE) {
-					panic();
-				}
 			}
+
+			// TODO: This is a client timeout. We should just disconnect the client here.
+			if(last_input_frame != 0 && server->frame - last_input_frame > INPUT_BUFFER_SIZE) {
+				panic();
+			}
+
 			server->world.player_inputs[i] = client->inputs[last_input_frame % INPUT_BUFFER_SIZE].input;
 
 			if(last_input_frame != server->frame) {
-				printf("Server: Missed a packet from client %u.\n", i);
+				//printf("Server: Missed a packet from client %u.\n", i);
+			}
+		}
+
+		if(false) {
+			printf("Server: Simulating frame: %i\n", server->frame);
+			if(server->frame == 0) {
+				s_t0 = platform_time_in_seconds();
+			} else  if(server->frame == 8) {
+				printf("Server delta(0,8) = %f\n", platform_time_in_seconds() - s_t0);
+				exit(0);
 			}
 		}
 
@@ -231,8 +246,8 @@ void server_update(Server* server, float delta_time)
 		update_packet.header.frame = server->frame;
 		update_packet.world_state = server->world;
 
-		for(u8 i = 0; i < server->connected_clients_len; i++) {
-			platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
+		for(u8 i = 0; i < server->active_connections_len; i++) {
+			platform_send_packet(server->socket, server->active_connections[i], &update_packet, sizeof(ServerStateUpdatePacket));
 		}
 
 		server->frame++;
@@ -240,7 +255,6 @@ void server_update(Server* server, float delta_time)
 		server->frame = 0;
 	}
 }
-
 
 bool server_close_requested(Server* server)
 {
