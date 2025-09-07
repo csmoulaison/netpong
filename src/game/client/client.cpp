@@ -212,7 +212,7 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 	platform_send_packet(client->socket, 0, (void*)&join_packet, sizeof(ClientJoinPacket));
 
 	// Render "connecting" indicator.
-	for(u8 i = 0; i < 2; i++) {
+	for(u8 i = 0; i < 3; i++) {
 		float xoff = -1000.0f;
 		if((client->frame / 60) % 3 == 0) {
 			xoff = 0.0f;
@@ -237,13 +237,20 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 
 	// Render
 	for(u8 i = 0; i < 2; i++) {
-		Rect box;
-		box.x = -0.9f + i * 1.8f;
-		box.y = world->paddle_positions[i];
-		box.w = 0.025f;
-		box.h = 0.1f;
-		client_render_box(render_state, box, platform);
+		Rect paddle;
+		paddle.x = -0.9f + i * 1.8f;
+		paddle.y = world->paddle_positions[i];
+		paddle.w = 0.025f;
+		paddle.h = 0.1f;
+		client_render_box(render_state, paddle, platform);
 	}
+
+	Rect ball;
+	ball.x = world->ball_position[0];
+	ball.y = world->ball_position[1];
+	ball.w = 0.025f;
+	ball.h = 0.025f;
+	client_render_box(render_state, ball, platform);
 }
 
 // We will probably want to package input from platform and input as needed here

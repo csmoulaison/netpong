@@ -4,11 +4,12 @@ struct PlayerInput {
 };
 
 struct World {
+	float ball_position[2];
+	float ball_velocity[2];
+
 	float paddle_positions[2];
 	float paddle_velocities[2];
 
-	// TODO: Separate inputs from world state. Makes a lot more sense, e.g. how
-	// inputs are selectively overriden by the client when resolving state updates.
 	PlayerInput player_inputs[2];
 };
 
@@ -16,8 +17,12 @@ void world_init(World* world)
 {
 	for(u8 i = 0; i < 2; i++)
 	{
+		world->ball_position[i] = 0.0f;
+		world->ball_velocity[i] = 0.75f - (i * 0.25f);
+
 		world->paddle_positions[i] = 0.0f;
 		world->paddle_velocities[i] = 0.0f;
+
 		world->player_inputs[i].move_up = false;
 		world->player_inputs[i].move_down = false;
 	}
@@ -49,5 +54,18 @@ void world_simulate(World* world, float dt)
 		}
 
 		world->paddle_positions[i] += world->paddle_velocities[i] * dt;
+
+		world->ball_position[i] += world->ball_velocity[i] * dt;
+	}
+
+	if(world->ball_position[0] < -1.0f
+	|| world->ball_position[0] > 1.0f) {
+		world->ball_velocity[0] = -world->ball_velocity[0];
+		//world->ball_position[0] += world->ball_position[0] - 1.0f;
+	}
+
+	if(world->ball_position[1] < -1.0f
+	|| world->ball_position[1] > 1.0f) {
+		world->ball_velocity[1] = -world->ball_velocity[1];
 	}
 }
