@@ -181,6 +181,16 @@ void server_update(Server* server, float delta_time)
 
 		world_simulate(&server->world, delta_time);
 
+		// TODO - Proper restart.
+		if(server->world.ball_position[0] < -1.5f
+		|| server->world.ball_position[0] > 1.5f) {
+			server->world.ball_position[0] = 0.0f;
+			server->world.ball_position[1] = 0.0f;
+			server->world.ball_velocity[0] = 0.7f;
+			server->world.ball_velocity[1] = 0.35f;
+			server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
+		}
+
 		ServerStateUpdatePacket update_packet = {};
 		update_packet.header.type = SERVER_PACKET_STATE_UPDATE;
 		update_packet.header.frame = server->frame;

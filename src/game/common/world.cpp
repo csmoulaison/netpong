@@ -4,6 +4,8 @@ struct PlayerInput {
 };
 
 struct World {
+	float countdown_to_start;
+
 	float ball_position[2];
 	float ball_velocity[2];
 
@@ -15,11 +17,15 @@ struct World {
 
 void world_init(World* world)
 {
+	world->countdown_to_start = START_COUNTDOWN_SECONDS;
+
+	world->ball_position[0] = 0.0f;
+	world->ball_position[1] = 0.0f;
+	world->ball_velocity[0] = 0.7f;
+	world->ball_velocity[1] = 0.35f;
+
 	for(u8 i = 0; i < 2; i++)
 	{
-		world->ball_position[i] = 0.0f;
-		world->ball_velocity[i] = 0.75f - (i * 0.35f);
-
 		world->paddle_positions[i] = 0.0f;
 		world->paddle_velocities[i] = 0.0f;
 
@@ -28,11 +34,13 @@ void world_init(World* world)
 	}
 }
 
-void handle_collisions(World* world, float dt) {
-}
-
 void world_simulate(World* world, float dt)
 {
+	if(world->countdown_to_start > 0.0f) {
+		world->countdown_to_start -= dt;
+		return;
+	}
+	
 	for(u32 i = 0; i < 2; i++) {
 		PlayerInput* input = &world->player_inputs[i];
 
@@ -93,14 +101,5 @@ void world_simulate(World* world, float dt)
 	|| ball_top > 1.0f) {
 		world->ball_velocity[1] = -world->ball_velocity[1];
 		world->ball_velocity[1] += world->ball_velocity[1] * dt;
-	}
-
-	// TODO - Proper restart.
-	if(ball_left < -1.25f
-	|| ball_right > 1.25f) {
-		world->ball_position[0] = 0.0f;
-		world->ball_position[1] = 0.0f;
-		world->ball_velocity[0] = 0.75f;
-		world->ball_velocity[1] = 0.45f;
 	}
 }
