@@ -2,18 +2,27 @@
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
 // TODO: It is time to implement:
-// - NOW: Game restart on win with state machine for pre-game pause.
-// - Client-side input attenuation
+// - NOW: Client-side input attenuation
 // - Visual smoothing for mispredictions
 // - Disconnection and time out on both client and server side
 // - Local multiplayer
 // - Local bot
 // - AND cleanup/comb for issues line by line, including packet serialization
+// 
 // THEN:
 // - Some sound?
 // - Debug text stuff
 // - Menu with mode selection, etc
-// FROM THERE
+// 
+// FROM THERE (NEW PROJECT):
+// - Cylinders on flat plane -> then terrain
+// - 3d with mouse look and WASD movement
+// - Radial collision handling, try bounce/direct block, idk
+//
+// AND THEN:
+// - Auto machine gun, not subject to client-side prediction. Must be resolved
+//   client side on a delay, unlike other clients.
+// - Physics scheme for mech stuff.
 
 // TODO: Things we want to be able to test/log/handle:
 // 1. Differing packet loss rates.
