@@ -238,18 +238,17 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	// Render
 	for(u8 i = 0; i < 2; i++) {
 		Rect paddle;
-		paddle.x = -0.9f + i * 1.8f;
+		paddle.x = -PADDLE_X + i * PADDLE_X * 2.0f;
 		paddle.y = world->paddle_positions[i];
-		paddle.w = 0.025f;
-		paddle.h = 0.1f;
+		paddle.w = PADDLE_WIDTH;
+		paddle.h = PADDLE_HEIGHT;
 		client_render_box(render_state, paddle, platform);
 	}
-
 	Rect ball;
 	ball.x = world->ball_position[0];
 	ball.y = world->ball_position[1];
-	ball.w = 0.025f;
-	ball.h = 0.025f;
+	ball.w = BALL_WIDTH;
+	ball.h = BALL_WIDTH;
 	client_render_box(render_state, ball, platform);
 }
 

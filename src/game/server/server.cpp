@@ -1,6 +1,20 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
+// TODO: It is time to implement:
+// - NOW: Game restart on win with state machine for pre-game pause.
+// - Client-side input attenuation
+// - Visual smoothing for mispredictions
+// - Disconnection and time out on both client and server side
+// - Local multiplayer
+// - Local bot
+// - AND cleanup/comb for issues line by line, including packet serialization
+// THEN:
+// - Some sound?
+// - Debug text stuff
+// - Menu with mode selection, etc
+// FROM THERE
+
 // TODO: Things we want to be able to test/log/handle:
 // 1. Differing packet loss rates.
 // 2. Differing packet latency/latency variance.
@@ -10,8 +24,6 @@
 //    in time.
 // 6. Clients running far ahead of server due to speed up packets not being
 //    reversed in time.
-
-double s_t0;
 
 struct ClientInput {
 	// So that we can tell if a certain frame has been received yet.
@@ -25,26 +37,15 @@ struct ServerConnection {
 
 struct Server {
 	PlatformSocket* socket;
-
-	World world;
-
-	// Represents the current simulation frame, the number of frames elapsed since
-	// the server session was initialized.
-	//
-	// INPUT_BUFFER_SIZE % Server.frame = The client input associated with the
-	// current simulation frame.
-	i32 frame;
-
 	ServerConnection connections[MAX_CLIENTS];
 	u8 connections_len;
 
-	// TODO: It is time to implement:
-	// - NOW: aspect ratio handling
-	// - Ball + bounce
-	// - Game restart on win
-	// - Disconnection and time out on both client and server side
-	// - Visual smoothing for mispredictions
-	// - AND cleanup/comb for issues line by line
+	// Represents the current simulation frame, the number of frames elapsed since
+	// the server session was initialized.
+	// INPUT_BUFFER_SIZE % Server.frame = The client input associated with the
+	// current simulation frame.
+	i32 frame;
+	World world;
 };
 
 Server* server_init(Arena* arena)

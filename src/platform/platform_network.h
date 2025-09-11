@@ -12,13 +12,13 @@
 #if NETWORK_SIM_MODE
 
 #define NETWORK_SIM_PACKET_BUFFER_SIZE 2048
-#define NETWORK_SIM_PACKET_LOSS_CHANCE 0.025f
+#define NETWORK_SIM_PACKET_LOSS_CHANCE 0.01f
 // TODO - In order to be correct about this, we really need to spawn a seperate
 // thread which counts this stuff down on its own. The way we process ticks with
 // an accumulator means the actual time before the packet is sent is only
 // loosely correlated with the numbers here.
 #define NETWORK_SIM_LATENCY_AVERAGE_SECONDS 0.04f
-#define NETWORK_SIM_LATENCY_VARIANCE_SECONDS 0.02f
+#define NETWORK_SIM_LATENCY_VARIANCE_SECONDS 0.01f
 
 struct SimPacket {
 	float countdown;
