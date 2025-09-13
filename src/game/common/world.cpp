@@ -13,6 +13,7 @@ struct World {
 	float paddle_velocities[2];
 
 	PlayerInput player_inputs[2];
+	float input_attenuator;
 };
 
 void world_init(World* world)
@@ -32,6 +33,7 @@ void world_init(World* world)
 		world->player_inputs[i].move_up = false;
 		world->player_inputs[i].move_down = false;
 	}
+	world->input_attenuator = 1.0f;
 }
 
 void world_simulate(World* world, float dt)
@@ -40,15 +42,24 @@ void world_simulate(World* world, float dt)
 		world->countdown_to_start -= dt;
 		return;
 	}
+
+	if(world->input_attenuator < 0.0f) {
+		world->input_attenuator = 0.0f;
+	}
 	
 	for(u32 i = 0; i < 2; i++) {
 		PlayerInput* input = &world->player_inputs[i];
 
+		float acceleration_mod = 1.0f;
+		if(i == 1) {
+			acceleration_mod = world->input_attenuator;
+		}
+
 		if(input->move_up) {
-			world->paddle_velocities[i] += PADDLE_ACCELERATION * dt;
+			world->paddle_velocities[i] += PADDLE_ACCELERATION * dt * acceleration_mod;
 		}
 		if(input->move_down) {
-			world->paddle_velocities[i] -= PADDLE_ACCELERATION * dt;
+			world->paddle_velocities[i] -= PADDLE_ACCELERATION * dt * acceleration_mod;
 		}
 
 		if(world->paddle_velocities[i] > 0) {

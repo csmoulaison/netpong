@@ -60,7 +60,23 @@ Client* client_init(Platform* platform, Arena* arena)
 	return client;
 }
 
-void client_simulate_frame(Client* client, Platform* platform)
+void client_simulate_frame(World* world, Client* client)
+{
+	// TODO: This is kind of a big huge thing I missed. The frame_length is being
+	// used here, and it's now often going to be different than in the case of the
+	// original simulation. We want to store the original frame length in each
+	// stored state after simulation, and reuse it the same way we currently reuse
+	// original inputs.
+	// 
+	// NOTE: The above ^ was written when this world_simulate call was inline to the
+	// client_resolve_state_update rollback simulation loop. It really only applies
+	// there, so when/if we resolve this, it will involve parameterizing
+	// client_simulate_frame with the frame length.
+	world_simulate(world, client->frame_length);
+	world->input_attenuator -= INPUT_ATTENUATION_SPEED * client->frame_length;
+}
+
+void client_simulate_and_advance_frame(Client* client, Platform* platform)
 {
 	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
 	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
@@ -72,7 +88,7 @@ void client_simulate_frame(Client* client, Platform* platform)
 	World* world = &client->states[frame_index].world;
 	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
 	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
-	world_simulate(world, client->frame_length);
+	client_simulate_frame(world, client);
 
 	// TODO: Send sliding window of inputs so that the server can check for holes
 	// in what it has received.
@@ -96,8 +112,9 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 	if(client->states[update_frame_index].frame != update_frame) {
 		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client->states[update_frame_index].frame, update_frame);
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+
 		while(client->frame < update_frame + 1) {
-			client_simulate_frame(client, platform);
+			client_simulate_and_advance_frame(client, platform);
 		}
 	}
 
@@ -115,6 +132,7 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 
 	assert(client->frame - update_frame >= 0);
 	memcpy(client_state, server_state, sizeof(World));
+	client_state->input_attenuator = 0.0f;
 
 	for(i32 i = update_frame + 1; i <= client->frame; i++) {
 		i32 prev_frame_index = (i - 1) % WORLD_STATE_BUFFER_SIZE;
@@ -126,12 +144,7 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 		World* world = &client->states[frame_index].world;
 		world->player_inputs[client->id] = cached_player_input;
 
-		// TODO: This is kind of a big huge thing I missed. The frame_length is being
-		// used here, and it's now often going to be different than in the case of the
-		// original simulation. We want to store the original frame length in each
-		// stored state after simulation, and reuse it the same way we currently reuse
-		// original inputs.
-		world_simulate(world, client->frame_length); 
+		client_simulate_frame(world, client);
 	}
 }
 
@@ -169,7 +182,7 @@ void client_process_packets(Client* client, Platform* platform)
 				platform_send_packet(client->socket, 0, &client_acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
 
 				for(i8 i = 0; i < 6; i++) {
-					client_simulate_frame(client, platform);
+					client_simulate_and_advance_frame(client, platform);
 				}
 
 				break;
@@ -229,7 +242,7 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
 {
-	client_simulate_frame(client, platform);
+	client_simulate_and_advance_frame(client, platform);
 
 	// TODO: Probably make a utility function.
 	i32 frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
