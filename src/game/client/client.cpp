@@ -30,6 +30,9 @@ struct Client {
 	ButtonHandle button_move_up;
 	ButtonHandle button_move_down;
 	ButtonHandle button_quit;
+
+	float visual_ball_position[2];
+	float visual_paddle_positions[2];
 };
 
 Client* client_init(Platform* platform, Arena* arena)
@@ -73,7 +76,20 @@ void client_simulate_frame(World* world, Client* client)
 	// there, so when/if we resolve this, it will involve parameterizing
 	// client_simulate_frame with the frame length.
 	world_simulate(world, client->frame_length);
-	world->input_attenuator -= INPUT_ATTENUATION_SPEED * client->frame_length;
+
+	u8 other_id = 0;
+	if(client->id == 0) {
+		other_id = 1;
+	}
+	// NOW: input attenuation is off
+	//world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
+	if(world->player_inputs[other_id].move_up < 0.0f) {
+		world->player_inputs[other_id].move_up == 0.0f;
+	}
+	//world->player_inputs[other_id].move_down -= INPUT_ATTENUATION_SPEED * client->frame_length;
+	if(world->player_inputs[other_id].move_down < 0.0f) {
+		world->player_inputs[other_id].move_down == 0.0f;
+	}
 }
 
 void client_simulate_and_advance_frame(Client* client, Platform* platform)
@@ -86,9 +102,22 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 
 	client->states[frame_index].frame = client->frame;
 	World* world = &client->states[frame_index].world;
-	world->player_inputs[client->id].move_up = platform_button_down(platform, client->button_move_up);
-	world->player_inputs[client->id].move_down = platform_button_down(platform, client->button_move_down);
+	if(platform_button_down(platform, client->button_move_up)) {
+		world->player_inputs[client->id].move_up = 1.0f;
+	} else {
+		world->player_inputs[client->id].move_up = 0.0f;
+	}
+	if(platform_button_down(platform, client->button_move_down)) {
+		world->player_inputs[client->id].move_down = 1.0f;
+	} else {
+		world->player_inputs[client->id].move_down = 0.0f;
+	}
 	client_simulate_frame(world, client);
+
+	client->visual_ball_position[0] = world->ball_position[0];
+	client->visual_ball_position[1] = world->ball_position[1];
+	client->visual_paddle_positions[0] = world->paddle_positions[0];
+	client->visual_paddle_positions[1] = world->paddle_positions[1];
 
 	// TODO: Send sliding window of inputs so that the server can check for holes
 	// in what it has received.
@@ -96,8 +125,8 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	input_packet.header.type = CLIENT_PACKET_INPUT;
 	input_packet.header.client_id = client->id;
 	input_packet.header.frame = client->frame;
-	input_packet.input_move_up = world->player_inputs[client->id].move_up;
-	input_packet.input_move_down = world->player_inputs[client->id].move_down;
+	input_packet.input_move_up = (world->player_inputs[client->id].move_up > 0.0f);
+	input_packet.input_move_down = (world->player_inputs[client->id].move_down > 0.0f);
 	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
 
 	client->frame++;
@@ -132,7 +161,6 @@ void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server
 
 	assert(client->frame - update_frame >= 0);
 	memcpy(client_state, server_state, sizeof(World));
-	client_state->input_attenuator = 0.0f;
 
 	for(i32 i = update_frame + 1; i <= client->frame; i++) {
 		i32 prev_frame_index = (i - 1) % WORLD_STATE_BUFFER_SIZE;
@@ -240,6 +268,16 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 	}
 }
 
+void client_visual_lerp(float* visual, float real, float dt)
+{
+	*visual = lerp(*visual, real, VISUAL_SMOOTHING_SPEED * dt);
+	if(abs(*visual - real) < VISUAL_SMOOTHING_EPSILON) {
+		*visual = real;
+	}
+	// NOW: visual lerping turned off
+	*visual = real;
+}
+
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
 {
 	client_simulate_and_advance_frame(client, platform);
@@ -248,18 +286,23 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	i32 frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
 	World* world = &client->states[frame_index].world;
 
+	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length);
+	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length);
+	client_visual_lerp(&client->visual_paddle_positions[0], world->paddle_positions[0], client->frame_length);
+	client_visual_lerp(&client->visual_paddle_positions[1], world->paddle_positions[1], client->frame_length);
+
 	// Render
 	for(u8 i = 0; i < 2; i++) {
 		Rect paddle;
 		paddle.x = -PADDLE_X + i * PADDLE_X * 2.0f;
-		paddle.y = world->paddle_positions[i];
+		paddle.y = client->visual_paddle_positions[i];
 		paddle.w = PADDLE_WIDTH;
 		paddle.h = PADDLE_HEIGHT;
 		client_render_box(render_state, paddle, platform);
 	}
 	Rect ball;
-	ball.x = world->ball_position[0];
-	ball.y = world->ball_position[1];
+	ball.x = client->visual_ball_position[0];
+	ball.y = client->visual_ball_position[1];
 	ball.w = BALL_WIDTH;
 	ball.h = BALL_WIDTH;
 	client_render_box(render_state, ball, platform);

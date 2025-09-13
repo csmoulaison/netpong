@@ -2,8 +2,19 @@
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
 // TODO: It is time to implement:
-// - NOW: Client-side input attenuation
 // - Visual smoothing for mispredictions
+//   - NOW: We have two things in flight at the moment: visual smoothing and
+//     input attenuation. Both are disabled at the moment and we are seeing an
+//     interesting jitter issue on only 1 client. This indicates there's some
+//     unintended asymmetry going on here, presumably related to rollback?
+//     1. Determine which client this is happening to.
+//        - ANSWER: It's client id 1 (player 2, right paddle).
+//        - NOTE: It's jittering both players on that client, and the
+//        movement is smooth on the other client. WHY??
+//     2. Brainstorm reasons this could happen and test them.
+//        - NOTE: It still happens with NETWORK_SIM_MODE turned off.
+//     3. It would probably be helpful to start logging some of the possible
+//        issues here.
 // - Disconnection and time out on both client and server side
 // - Local multiplayer
 // - Local bot
@@ -118,8 +129,18 @@ void server_process_packets(Server* server)
 
 				buffer_input = &client->inputs[input_packet->header.frame % INPUT_BUFFER_SIZE];
 				buffer_input->frame = input_packet->header.frame;
-				buffer_input->input.move_up = input_packet->input_move_up;
-				buffer_input->input.move_down = input_packet->input_move_down;
+
+				if(input_packet->input_move_up) {
+					buffer_input->input.move_up = 1.0f;
+				} else {
+					buffer_input->input.move_up = 0.0f;
+				}
+				if(input_packet->input_move_down) {
+					buffer_input->input.move_down = 1.0f;
+				} else {
+					buffer_input->input.move_down = 0.0f;
+				}
+
 				break;
 			default: break;
 		}
@@ -184,7 +205,7 @@ void server_update(Server* server, float delta_time)
 			server->world.player_inputs[i] = client->inputs[last_input_frame % INPUT_BUFFER_SIZE].input;
 
 			if(last_input_frame != server->frame) {
-				//printf("Server: Missed a packet from client %u.\n", i);
+				printf("Server: Missed a packet from client %u.\n", i);
 			}
 		}
 

@@ -1,6 +1,6 @@
 struct PlayerInput {
-	bool move_up;
-	bool move_down;
+	float move_up;
+	float move_down;
 };
 
 struct World {
@@ -13,7 +13,6 @@ struct World {
 	float paddle_velocities[2];
 
 	PlayerInput player_inputs[2];
-	float input_attenuator;
 };
 
 void world_init(World* world)
@@ -22,18 +21,17 @@ void world_init(World* world)
 
 	world->ball_position[0] = 0.0f;
 	world->ball_position[1] = 0.0f;
-	world->ball_velocity[0] = 0.7f;
-	world->ball_velocity[1] = 0.35f;
+	world->ball_velocity[0] = BALL_SPEED_INIT_X;
+	world->ball_velocity[1] = BALL_SPEED_INIT_Y;
 
 	for(u8 i = 0; i < 2; i++)
 	{
 		world->paddle_positions[i] = 0.0f;
 		world->paddle_velocities[i] = 0.0f;
 
-		world->player_inputs[i].move_up = false;
-		world->player_inputs[i].move_down = false;
+		world->player_inputs[i].move_up = 0.0f;
+		world->player_inputs[i].move_down = 0.0f;
 	}
-	world->input_attenuator = 1.0f;
 }
 
 void world_simulate(World* world, float dt)
@@ -43,23 +41,14 @@ void world_simulate(World* world, float dt)
 		return;
 	}
 
-	if(world->input_attenuator < 0.0f) {
-		world->input_attenuator = 0.0f;
-	}
-	
 	for(u32 i = 0; i < 2; i++) {
 		PlayerInput* input = &world->player_inputs[i];
 
-		float acceleration_mod = 1.0f;
-		if(i == 1) {
-			acceleration_mod = world->input_attenuator;
+		if(input->move_up > 0.0f) {
+			world->paddle_velocities[i] += input->move_up * PADDLE_ACCELERATION * dt;
 		}
-
-		if(input->move_up) {
-			world->paddle_velocities[i] += PADDLE_ACCELERATION * dt * acceleration_mod;
-		}
-		if(input->move_down) {
-			world->paddle_velocities[i] -= PADDLE_ACCELERATION * dt * acceleration_mod;
+		if(input->move_down > 0.0f) {
+			world->paddle_velocities[i] -= input->move_down * PADDLE_ACCELERATION * dt;
 		}
 
 		if(world->paddle_velocities[i] > 0) {
@@ -68,11 +57,16 @@ void world_simulate(World* world, float dt)
 			world->paddle_velocities[i] += PADDLE_FRICTION * dt;
 		}
 
-		if(world->paddle_velocities[i] > PADDLE_MAX_SPEED) {
-			world->paddle_velocities[i] = PADDLE_MAX_SPEED;
+		float attenuated_up_speed = PADDLE_MAX_SPEED * input->move_up;
+		float attenuated_down_speed = PADDLE_MAX_SPEED * input->move_down;
+
+		attenuated_up_speed = PADDLE_MAX_SPEED;
+		attenuated_down_speed = PADDLE_MAX_SPEED;
+		if(world->paddle_velocities[i] > attenuated_up_speed) {
+			world->paddle_velocities[i] = attenuated_up_speed;
 		}
-		if(world->paddle_velocities[i] < -PADDLE_MAX_SPEED) {
-			world->paddle_velocities[i] = -PADDLE_MAX_SPEED;
+		if(world->paddle_velocities[i] < -attenuated_down_speed) {
+			world->paddle_velocities[i] = -attenuated_down_speed;
 		}
 
 		world->paddle_positions[i] += world->paddle_velocities[i] * dt;
