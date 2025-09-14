@@ -82,11 +82,11 @@ void client_simulate_frame(World* world, Client* client)
 		other_id = 1;
 	}
 	// NOW: input attenuation is off
-	//world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
+	world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_up < 0.0f) {
 		world->player_inputs[other_id].move_up == 0.0f;
 	}
-	//world->player_inputs[other_id].move_down -= INPUT_ATTENUATION_SPEED * client->frame_length;
+	world->player_inputs[other_id].move_down -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_down < 0.0f) {
 		world->player_inputs[other_id].move_down == 0.0f;
 	}

@@ -89,7 +89,7 @@ void world_simulate(World* world, float dt)
 	float paddle_bottom = world->paddle_positions[paddle_index] - PADDLE_HEIGHT;
 	float paddle_top = world->paddle_positions[paddle_index] + PADDLE_HEIGHT;
 
-	// TODO - Rollover extra velocity into bounce direction.
+	// TODO: Bounce position not quite right. Ball is inside of paddles and walls.
 	if(ball_left < paddle_right && ball_right > paddle_left
 	&& ball_top > paddle_bottom && ball_bottom < paddle_top) {
 		if(ball_left - world->ball_velocity[0] > paddle_right

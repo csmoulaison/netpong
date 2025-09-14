@@ -7,7 +7,7 @@
 #define MAX_PAYLOAD_PACKETS 64
 #define MAX_PACKET_BYTES 2048
 
-#define NETWORK_SIM_MODE false
+#define NETWORK_SIM_MODE true
 
 #if NETWORK_SIM_MODE
 
