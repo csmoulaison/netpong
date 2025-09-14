@@ -7,6 +7,8 @@
 //     input attenuation. Both are disabled at the moment and we are seeing an
 //     interesting jitter issue on only 1 client. This indicates there's some
 //     unintended asymmetry going on here, presumably related to rollback?
+//     NOTE: I think we might have fixed it by stopping friction from overshooting
+//     0 velocity.
 //     1. Determine which client this is happening to.
 //        - ANSWER: It's client id 1 (player 2, right paddle).
 //        - NOTE: It's jittering both players on that client, and the

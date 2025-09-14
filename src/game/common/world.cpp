@@ -46,27 +46,27 @@ void world_simulate(World* world, float dt)
 
 		if(input->move_up > 0.0f) {
 			world->paddle_velocities[i] += input->move_up * PADDLE_ACCELERATION * dt;
+			if(world->paddle_velocities[i] > PADDLE_MAX_SPEED) {
+				world->paddle_velocities[i] = PADDLE_MAX_SPEED;
+			}
 		}
 		if(input->move_down > 0.0f) {
 			world->paddle_velocities[i] -= input->move_down * PADDLE_ACCELERATION * dt;
+			if(world->paddle_velocities[i] < -PADDLE_MAX_SPEED) {
+				world->paddle_velocities[i] = -PADDLE_MAX_SPEED;
+			}
 		}
 
-		if(world->paddle_velocities[i] > 0) {
+		if(world->paddle_velocities[i] > 0.0f) {
 			world->paddle_velocities[i] -= PADDLE_FRICTION * dt;
-		} else if(world->paddle_velocities[i] < 0) {
+			if(world->paddle_velocities[i] < 0.0f) {
+				world->paddle_velocities[i] = 0.0f;
+			}
+		} else if(world->paddle_velocities[i] < 0.0f) {
 			world->paddle_velocities[i] += PADDLE_FRICTION * dt;
-		}
-
-		float attenuated_up_speed = PADDLE_MAX_SPEED * input->move_up;
-		float attenuated_down_speed = PADDLE_MAX_SPEED * input->move_down;
-
-		attenuated_up_speed = PADDLE_MAX_SPEED;
-		attenuated_down_speed = PADDLE_MAX_SPEED;
-		if(world->paddle_velocities[i] > attenuated_up_speed) {
-			world->paddle_velocities[i] = attenuated_up_speed;
-		}
-		if(world->paddle_velocities[i] < -attenuated_down_speed) {
-			world->paddle_velocities[i] = -attenuated_down_speed;
+			if(world->paddle_velocities[i] > 0.0f) {
+				world->paddle_velocities[i] = 0.0f;
+			}
 		}
 
 		world->paddle_positions[i] += world->paddle_velocities[i] * dt;
