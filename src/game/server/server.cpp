@@ -2,21 +2,21 @@
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
 // TODO: It is time to implement:
-// - Visual smoothing for mispredictions
-//   - NOW: We have two things in flight at the moment: visual smoothing and
-//     input attenuation. Both are disabled at the moment and we are seeing an
-//     interesting jitter issue on only 1 client. This indicates there's some
-//     unintended asymmetry going on here, presumably related to rollback?
-//     NOTE: I think we might have fixed it by stopping friction from overshooting
-//     0 velocity.
-//     1. Determine which client this is happening to.
-//        - ANSWER: It's client id 1 (player 2, right paddle).
-//        - NOTE: It's jittering both players on that client, and the
-//        movement is smooth on the other client. WHY??
-//     2. Brainstorm reasons this could happen and test them.
-//        - NOTE: It still happens with NETWORK_SIM_MODE turned off.
-//     3. It would probably be helpful to start logging some of the possible
+// - NOW: We have two things in flight at the moment: visual smoothing and
+//   input attenuation. Both are disabled at the moment and we are seeing an
+//   interesting jitter issue on only 1 client. This indicates there's some
+//   unintended asymmetry going on here, presumably related to rollback?
+//   1. Determine which client this is happening to.
+//      - ANSWER: It's client id 1 (player 2, right paddle).
+//      - NOTE: It's jittering both players on that client, and the
+//      movement is smooth on the other client. WHY??
+//   2. Brainstorm reasons this could happen and test them.
+//      - NOTE: It still happens with NETWORK_SIM_MODE turned off.
+//   3. It would probably be helpful to start logging some of the possible
 //        issues here.
+//   NOTE: I think we might have fixed it by stopping friction from overshooting
+//   0 velocity.
+//   
 // - Disconnection and time out on both client and server side
 // - Local multiplayer
 // - Local bot
@@ -213,13 +213,15 @@ void server_update(Server* server, float delta_time)
 
 		world_simulate(&server->world, delta_time);
 
-		// TODO - Proper restart.
 		if(server->world.ball_position[0] < -1.5f
 		|| server->world.ball_position[0] > 1.5f) {
+			// TODO: Should be world_init. Anything wrong with that?
 			server->world.ball_position[0] = 0.0f;
 			server->world.ball_position[1] = 0.0f;
 			server->world.ball_velocity[0] = 0.7f;
 			server->world.ball_velocity[1] = 0.35f;
+			server->world.paddle_positions[0] = 0.0f;
+			server->world.paddle_positions[1] = 0.0f;
 			server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
 		}
 
