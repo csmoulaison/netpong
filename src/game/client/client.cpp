@@ -81,7 +81,8 @@ void client_simulate_frame(World* world, Client* client)
 	if(client->id == 0) {
 		other_id = 1;
 	}
-	// NOW: input attenuation is off
+
+	// TODO: Test input attenuation against intended case.
 	world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_up < 0.0f) {
 		world->player_inputs[other_id].move_up == 0.0f;
@@ -113,11 +114,6 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 		world->player_inputs[client->id].move_down = 0.0f;
 	}
 	client_simulate_frame(world, client);
-
-	client->visual_ball_position[0] = world->ball_position[0];
-	client->visual_ball_position[1] = world->ball_position[1];
-	client->visual_paddle_positions[0] = world->paddle_positions[0];
-	client->visual_paddle_positions[1] = world->paddle_positions[1];
 
 	// TODO: Send sliding window of inputs so that the server can check for holes
 	// in what it has received.
@@ -274,8 +270,6 @@ void client_visual_lerp(float* visual, float real, float dt)
 	if(abs(*visual - real) < VISUAL_SMOOTHING_EPSILON) {
 		*visual = real;
 	}
-	// NOW: visual lerping turned off
-	*visual = real;
 }
 
 void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
@@ -286,10 +280,14 @@ void client_update_connected(Client* client, Platform* platform, RenderState* re
 	i32 frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
 	World* world = &client->states[frame_index].world;
 
-	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length);
-	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length);
-	client_visual_lerp(&client->visual_paddle_positions[0], world->paddle_positions[0], client->frame_length);
-	client_visual_lerp(&client->visual_paddle_positions[1], world->paddle_positions[1], client->frame_length);
+	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
+	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
+	u8 other_id = 0;
+	if(client->id == 0) {
+		other_id = 1;
+	}
+	client_visual_lerp(&client->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
+	client->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
 
 	// Render
 	for(u8 i = 0; i < 2; i++) {
