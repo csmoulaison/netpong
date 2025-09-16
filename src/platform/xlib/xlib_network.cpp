@@ -12,13 +12,21 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+struct XlibConnection {
+	bool free;
+	struct sockaddr_in connections;
+};
+
 struct XlibSocket {
 	i32 descriptor;
 
 	i8 connections_len;
-	struct sockaddr_in* connections;
+	XlibConnection* connections;
 };
 
+// NOW: I think we are probably moving towards a world where server/client
+// sockets aren't distinguished on the platform level. All those distinctions
+// should probably live on the other side of the pond.
 PlatformSocket* platform_init_server_socket(Arena* arena)
 {
 	PlatformSocket* platform_socket = (PlatformSocket*)arena_alloc(arena, sizeof(PlatformSocket));
@@ -26,7 +34,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 	platform_socket->backend = arena_alloc(arena, sizeof(XlibSocket));
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
-	sock->connections = (struct sockaddr_in*)arena_alloc(arena, sizeof(struct sockaddr_in) * MAX_CLIENTS);
+	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection) * MAX_CLIENTS);
 	sock->connections_len = 0;
 	
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
@@ -58,7 +66,7 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	platform_socket->backend = arena_alloc(arena, sizeof(XlibSocket));
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
-	sock->connections = (struct sockaddr_in*)arena_alloc(arena, sizeof(struct sockaddr_in));
+	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection));
 	sock->connections_len = 1;
 
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
@@ -73,6 +81,11 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	server_address->sin_port = htons(8080);
 
 	return platform_socket;
+}
+
+void platform_free_connection(PlatformSocket* socket, i8 connection_id)
+{
+	
 }
 
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.

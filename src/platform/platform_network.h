@@ -7,7 +7,7 @@
 #define MAX_PAYLOAD_PACKETS 64
 #define MAX_PACKET_BYTES 2048
 
-#define NETWORK_SIM_MODE true
+#define NETWORK_SIM_MODE false
 
 #if NETWORK_SIM_MODE
 
@@ -63,13 +63,15 @@ PlatformSocket* platform_init_server_socket(Arena* arena);
 // Opens a UDP socket for clients.
 PlatformSocket* platform_init_client_socket(Arena* arena);
 
-// Sends a packet to given connection. Assumes the connection exists.
+// Opens a connection id to be used for another IP. Called after a client
+// disconnect or to reject a first-time connection, for instance.
+void platform_free_connection(PlatformSocket* socket, i8 connection_id);
+
+// Sends a network packet to given connection. Assumes the connection exists.
 void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size);
 
-// Pull all packets received since the previous call of this function.
-// 
-// The packets are stored in the passed memory arena, so the arena needs to be
-// freed or it's a memory leak.
+// Pull all packets received since the previous call of this function. The
+// packets are allocated to the given memory arena, so remember to free it.
 PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena);
 
 #if NETWORK_SIM_MODE

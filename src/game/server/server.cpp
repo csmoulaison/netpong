@@ -2,7 +2,7 @@
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
 // TODO: It is time to implement:
-// - NOW: We have two things in flight at the moment: visual smoothing and
+// - We have two things in flight at the moment: visual smoothing and
 //   input attenuation. Both are disabled at the moment and we are seeing an
 //   interesting jitter issue on only 1 client. This indicates there's some
 //   unintended asymmetry going on here, presumably related to rollback?
@@ -17,7 +17,7 @@
 //   NOTE: I think we might have fixed it by stopping friction from overshooting
 //   0 velocity.
 //   
-// - Disconnection and time out on both client and server side
+// - NOW: Disconnection and time out on both client and server side
 // - Local multiplayer
 // - Local bot
 // - AND cleanup/comb for issues line by line, including packet serialization
@@ -199,7 +199,7 @@ void server_update(Server* server, float delta_time)
 				}
 			}
 
-			// TODO: This is a client timeout. We should just disconnect the client here.
+			// NOW: This is a client timeout. We should just disconnect the client here.
 			if(last_input_frame != 0 && server->frame - last_input_frame > INPUT_BUFFER_SIZE) {
 				panic();
 			}
