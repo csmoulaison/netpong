@@ -14,13 +14,20 @@
 
 struct XlibConnection {
 	bool free;
-	struct sockaddr_in connections;
+	struct sockaddr_in address;
 };
 
+// NOW: << HERE: So we are currently trying a failing approach, I think.
+// 
+// We are in the process of making it so that a connection being free is a bool
+// on a list of connections. This means that in order to fill connections and
+// also to iterate through free connections, we need to iterate up to
+// MAX_CLIENTS.
+//
+// This is probably fine, but it really just isn't the right structure. Time for
+// pen and paper, I think. Lookup index, etc.
 struct XlibSocket {
 	i32 descriptor;
-
-	i8 connections_len;
 	XlibConnection* connections;
 };
 
@@ -35,7 +42,9 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
 	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection) * MAX_CLIENTS);
-	sock->connections_len = 0;
+	for(u8 i = 0; i < MAX_CLIENTS; i++) {
+		sock->connections[i].free = true;
+	}
 	
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
 		panic();
@@ -67,18 +76,22 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
 	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection));
-	sock->connections_len = 1;
+
+	for(u8 i = 0; i < MAX_CLIENTS; i++) {
+		sock->connections[i].free = true;
+	}
 
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
 		panic();
 	}
 
-	struct sockaddr_in* server_address = &sock->connections[0];
-	memset(server_address, 0, sizeof(struct sockaddr_in));
+	XlibConnection* server = &sock->connections[0];
+	server->free = false;
+	memset(&server->address, 0, sizeof(struct sockaddr_in));
 
-	server_address->sin_family = AF_INET;
-	server_address->sin_addr.s_addr = INADDR_ANY;
-	server_address->sin_port = htons(8080);
+	server->address.sin_family = AF_INET;
+	server->address.sin_addr.s_addr = INADDR_ANY;
+	server->address.sin_port = htons(8080);
 
 	return platform_socket;
 }
@@ -92,11 +105,10 @@ void platform_free_connection(PlatformSocket* socket, i8 connection_id)
 void xlib_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size)
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
-	assert(connection_id < sock->connections_len);
 
-	struct sockaddr_in* server_address = &sock->connections[connection_id];
+	XlibConnection* connection = &sock->connections[connection_id];
 	sendto(sock->descriptor, packet, size, MSG_CONFIRM, 
-		(struct sockaddr*)&sock->connections[connection_id], sizeof(struct sockaddr_in));
+		(struct sockaddr*)&sock->connections[connection_id].address, sizeof(struct sockaddr_in));
 }
 
 #if NETWORK_SIM_MODE == true
@@ -174,9 +186,12 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 			if(socket->type == SOCKET_TYPE_SERVER) {
 				// Compare against other connections.
+				// 
+				// NOW: Check all and see if they are free.
 				bool connection_already_exists = false;
-				for(u8 i = 0; i < sock->connections_len; i++) {
-					struct sockaddr_in* existing_address = &sock->connections[i];
+				for(u8 i = 0; i < MAX_CLIENTS; i++) {
+					XlibConnection* existing_connection = &sock->connections[i];
+					struct sockaddr_in* existing_address = &existing_connection->address;
 					bool ip_match = (memcmp(&existing_address->sin_addr.s_addr, &sender_address.sin_addr.s_addr, sizeof(existing_address->sin_addr.s_addr)) == 0);
 					bool port_match = (memcmp(&existing_address->sin_port, &sender_address.sin_port, sizeof(existing_address->sin_port)) == 0);
 
@@ -188,6 +203,7 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 				}
 				if(!connection_already_exists) {
 					// TODO - Reject if too many connections.
+					// NOW: connections_len doesn't exist. Find first free index and fill it.
 					packet->connection_id = sock->connections_len;
 					sock->connections[sock->connections_len] = sender_address;
 					sock->connections_len++;
