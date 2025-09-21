@@ -13,25 +13,21 @@
 #include <netinet/in.h>
 
 struct XlibConnection {
-	bool free;
 	struct sockaddr_in address;
+	i32 id;
 };
 
-// NOW: << HERE: So we are currently trying a failing approach, I think.
-// 
-// We are in the process of making it so that a connection being free is a bool
-// on a list of connections. This means that in order to fill connections and
-// also to iterate through free connections, we need to iterate up to
-// MAX_CLIENTS.
-//
-// This is probably fine, but it really just isn't the right structure. Time for
-// pen and paper, I think. Lookup index, etc.
 struct XlibSocket {
 	i32 descriptor;
+
 	XlibConnection* connections;
+	u32 connections_len;
+
+	// Lookup table into connections. Indices into this table are connection_ids.
+	i32 id_to_connection[MAX_CLIENTS];
 };
 
-// NOW: I think we are probably moving towards a world where server/client
+// TODO: I think we are probably moving towards a world where server/client
 // sockets aren't distinguished on the platform level. All those distinctions
 // should probably live on the other side of the pond.
 PlatformSocket* platform_init_server_socket(Arena* arena)
@@ -42,10 +38,11 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
 	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection) * MAX_CLIENTS);
-	for(u8 i = 0; i < MAX_CLIENTS; i++) {
-		sock->connections[i].free = true;
+	sock->connections_len = 0;
+	for(i32 i = 0; i < MAX_CLIENTS; i++) {
+		sock->id_to_connection[i] = -1;
 	}
-	
+
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
 		panic();
 	}
@@ -76,17 +73,14 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 
 	XlibSocket* sock = (XlibSocket*)platform_socket->backend;
 	sock->connections = (XlibConnection*)arena_alloc(arena, sizeof(XlibConnection));
-
-	for(u8 i = 0; i < MAX_CLIENTS; i++) {
-		sock->connections[i].free = true;
-	}
+	sock->connections_len = 1;
+	sock->id_to_connection[0] = 0;
 
 	if((sock->descriptor = socket(AF_INET, SOCK_DGRAM | SOCK_NONBLOCK, 0)) < 0) {
 		panic();
 	}
 
 	XlibConnection* server = &sock->connections[0];
-	server->free = false;
 	memset(&server->address, 0, sizeof(struct sockaddr_in));
 
 	server->address.sin_family = AF_INET;
@@ -98,7 +92,14 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 
 void platform_free_connection(PlatformSocket* socket, i8 connection_id)
 {
-	
+	XlibSocket* sock = (XlibSocket*)socket->backend;
+	if(sock->id_to_connection[connection_id] != sock->connections_len - 1) {
+		XlibConnection replacement = sock->connections[sock->connections_len - 1];
+		sock->connections[sock->id_to_connection[connection_id]] = replacement;
+		sock->id_to_connection[replacement.id] = sock->id_to_connection[connection_id];
+	}
+	sock->connections_len--;
+	sock->id_to_connection[connection_id] = -1;
 }
 
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
@@ -106,9 +107,9 @@ void xlib_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u3
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
-	XlibConnection* connection = &sock->connections[connection_id];
+	XlibConnection* connection = &sock->connections[sock->id_to_connection[connection_id]];
 	sendto(sock->descriptor, packet, size, MSG_CONFIRM, 
-		(struct sockaddr*)&sock->connections[connection_id].address, sizeof(struct sockaddr_in));
+		(struct sockaddr*)&connection->address, sizeof(struct sockaddr_in));
 }
 
 #if NETWORK_SIM_MODE == true
@@ -186,27 +187,38 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 			if(socket->type == SOCKET_TYPE_SERVER) {
 				// Compare against other connections.
-				// 
-				// NOW: Check all and see if they are free.
 				bool connection_already_exists = false;
-				for(u8 i = 0; i < MAX_CLIENTS; i++) {
+				for(u32 i = 0; i < sock->connections_len; i++) {
 					XlibConnection* existing_connection = &sock->connections[i];
 					struct sockaddr_in* existing_address = &existing_connection->address;
-					bool ip_match = (memcmp(&existing_address->sin_addr.s_addr, &sender_address.sin_addr.s_addr, sizeof(existing_address->sin_addr.s_addr)) == 0);
-					bool port_match = (memcmp(&existing_address->sin_port, &sender_address.sin_port, sizeof(existing_address->sin_port)) == 0);
 
-					if(existing_address->sin_addr.s_addr == sender_address.sin_addr.s_addr &&
-			        existing_address->sin_port == sender_address.sin_port) {
-						packet->connection_id = i;
+					if(existing_address->sin_addr.s_addr == sender_address.sin_addr.s_addr && existing_address->sin_port == sender_address.sin_port) {
+						packet->connection_id = sock->connections[i].id;
 						connection_already_exists = true;
 					}
 				}
 				if(!connection_already_exists) {
-					// TODO - Reject if too many connections.
-					// NOW: connections_len doesn't exist. Find first free index and fill it.
-					packet->connection_id = sock->connections_len;
-					sock->connections[sock->connections_len] = sender_address;
-					sock->connections_len++;
+					bool slot_found = false;
+					for(u32 i = 0; i < MAX_CLIENTS; i++) {
+						if(sock->id_to_connection[i] == -1) {
+							sock->id_to_connection[i] = sock->connections_len;
+							packet->connection_id = i;
+
+							XlibConnection* new_connection = &sock->connections[sock->connections_len];
+							new_connection->address = sender_address;
+							new_connection->id = i;
+
+							sock->connections_len++;
+							slot_found = true;
+
+							break;
+						}
+					}
+					// TODO: Handle too many connections more gracefully.
+					if(!slot_found) {
+						printf("No free connections!\n");
+						panic();
+					}
 					printf("Server: Add client connection.\n");
 				}
 			} else { // socket->type == SOCKET_TYPE_CLIENT
@@ -220,9 +232,5 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 
 	panic();
 }
-
-#if NETWORK_SIM_MODE == true
-
-#endif
 
 #endif // xlib_network_h_INCLUDED

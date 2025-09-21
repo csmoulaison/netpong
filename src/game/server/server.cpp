@@ -1,23 +1,10 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
-// TODO: It is time to implement:
-// - We have two things in flight at the moment: visual smoothing and
-//   input attenuation. Both are disabled at the moment and we are seeing an
-//   interesting jitter issue on only 1 client. This indicates there's some
-//   unintended asymmetry going on here, presumably related to rollback?
-//   1. Determine which client this is happening to.
-//      - ANSWER: It's client id 1 (player 2, right paddle).
-//      - NOTE: It's jittering both players on that client, and the
-//      movement is smooth on the other client. WHY??
-//   2. Brainstorm reasons this could happen and test them.
-//      - NOTE: It still happens with NETWORK_SIM_MODE turned off.
-//   3. It would probably be helpful to start logging some of the possible
-//        issues here.
-//   NOTE: I think we might have fixed it by stopping friction from overshooting
-//   0 velocity.
-//   
-// - NOW: Disconnection and time out on both client and server side
+// TIME TO IMPLEMENT:
+// - NOW: Disconnection and time out on both client and server side.
+//   - Add another phase for clients to be in where are waiting for both players
+//     to exist.
 // - Local multiplayer
 // - Local bot
 // - AND cleanup/comb for issues line by line, including packet serialization
@@ -48,19 +35,18 @@
 //    reversed in time.
 
 struct ClientInput {
-	// So that we can tell if a certain frame has been received yet.
 	i32 frame;
 	PlayerInput input;
 };
 
 struct ServerConnection {
+	bool connected;
 	ClientInput inputs[INPUT_BUFFER_SIZE];
 };
 
 struct Server {
 	PlatformSocket* socket;
-	ServerConnection connections[MAX_CLIENTS];
-	u8 connections_len;
+	ServerConnection connections[2];
 
 	// Represents the current simulation frame, the number of frames elapsed since
 	// the server session was initialized.
@@ -76,9 +62,9 @@ Server* server_init(Arena* arena)
 	server->socket = platform_init_server_socket(arena);
 	server->frame = 0;
 
-	server->connections_len = 0;
-	for(u8 i = 0; i < MAX_CLIENTS; i++) {
+	for(u8 i = 0; i < 2; i++) {
 		ServerConnection* client = &server->connections[i];
+		client->connected = false;
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			client->inputs[j].frame = -1;
 			client->inputs[j].input = {};
@@ -86,7 +72,6 @@ Server* server_init(Arena* arena)
 	}
 
 	world_init(&server->world);
-
 	return server;
 }
 
@@ -103,26 +88,37 @@ void server_process_packets(Server* server)
 	
 	while(packet != nullptr) {
 		i8 connection_id = packet->connection_id;
+		assert(connection_id <= 1);
+
 		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
 
 		ServerJoinAcknowledgePacket server_acknowledge_packet;
 		ClientInputPacket* input_packet;
 		ServerConnection* client;
 		ClientInput* buffer_input;
+		i32 unfilled_slot;
 
 		switch(header->type) {
 			case CLIENT_PACKET_JOIN:
-				assert(connection_id <= server->connections_len);
-
+				// NOW: This runs afoul, I do believe. The logic of this paragraph is not in
+				// agreement with the logic in the next, I think.
 				server_acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
 				server_acknowledge_packet.client_id = connection_id;
 				server_acknowledge_packet.frame = server->frame;
 				server_acknowledge_packet.world_state = server->world;
 				platform_send_packet(server->socket, connection_id, (void*)&server_acknowledge_packet, sizeof(ServerJoinAcknowledgePacket));
 
-				if(connection_id == server->connections_len) {
+				unfilled_slot = -1;
+				for(u32 i = 0; i < 2; i++) {
+					if(!server->connections[i].connected) {
+						server->connections[i].connected = true;
+						unfilled_slot = i;
+						break;
+					}
+				}
+
+				if(unfilled_slot != -1) {
 					printf("Acknowledging client join, adding client: %d\n", connection_id);
-					server->connections_len++;
 				}
 				break;
 			case CLIENT_PACKET_INPUT:
@@ -160,10 +156,13 @@ void server_update(Server* server, float delta_time)
 	platform_update_sim_mode(server->socket, delta_time);
 #endif
 
-	for(i8 i = 0; i < server->connections_len; i++) {
+	for(i8 i = 0; i < 2; i++) {
 		ServerConnection* client = &server->connections[i];
-		i32 latest_frame = 0;
+		if(!client->connected) {
+			break;
+		}
 
+		i32 latest_frame = 0;
 		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			if(latest_frame < client->inputs[j].frame) {
 				latest_frame = client->inputs[j].frame;
@@ -185,9 +184,12 @@ void server_update(Server* server, float delta_time)
 		}
 	}
 
-	if(server->connections_len > 0) {
-		for(u8 i = 0; i < server->connections_len; i++) {
+	if(server->connections[0].connected || server->connections[1].connected) {
+		for(u8 i = 0; i < 2; i++) {
 			ServerConnection* client = &server->connections[i];
+			if(!client->connected) {
+				break;
+			}
 
 			i32 last_input_frame = server->frame;
 			while(client->inputs[last_input_frame % INPUT_BUFFER_SIZE].frame != last_input_frame) {
@@ -199,9 +201,18 @@ void server_update(Server* server, float delta_time)
 				}
 			}
 
-			// NOW: This is a client timeout. We should just disconnect the client here.
 			if(last_input_frame != 0 && server->frame - last_input_frame > INPUT_BUFFER_SIZE) {
-				panic();
+				// Client timeout. Do the following:
+				// - ~~Send disconnect packet to client.
+				// - Free the connection.
+				ServerDisconnectPacket disconnect_packet;
+				disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
+				disconnect_packet.header.frame = 0;
+				platform_send_packet(server->socket, i, &disconnect_packet, sizeof(ServerDisconnectPacket));
+
+				platform_free_connection(server->socket, i);
+				server->connections[i].connected = false;
+				printf("Freed connection %u.\n", i);
 			}
 
 			server->world.player_inputs[i] = client->inputs[last_input_frame % INPUT_BUFFER_SIZE].input;
@@ -230,8 +241,10 @@ void server_update(Server* server, float delta_time)
 		update_packet.header.frame = server->frame;
 		update_packet.world_state = server->world;
 
-		for(u8 i = 0; i < server->connections_len; i++) {
-			platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
+		for(u8 i = 0; i < 2; i++) {
+			if(server->connections[i].connected) {
+				platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
+			}
 		}
 
 		server->frame++;

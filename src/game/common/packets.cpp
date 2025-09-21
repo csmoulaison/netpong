@@ -8,7 +8,7 @@ enum ClientPacketType {
 struct ClientPacketHeader {
 	ClientPacketType type;
 	u8 client_id;
-	i32 frame;
+	i32 frame; // TODO: See ServerPacketHeader note, and so too the same.
 };
 
 struct ClientJoinPacket {
@@ -28,6 +28,7 @@ struct ClientInputPacket {
 // Server packets
 enum ServerPacketType {
 	SERVER_PACKET_JOIN_ACKNOWLEDGE,
+	SERVER_PACKET_DISCONNECT,
 	SERVER_PACKET_STATE_UPDATE,
 	SERVER_PACKET_SPEED_UP,
 	SERVER_PACKET_SLOW_DOWN
@@ -35,7 +36,7 @@ enum ServerPacketType {
 
 struct ServerPacketHeader {
 	ServerPacketType type;
-	i32 frame;
+	i32 frame; // TODO: This is not always used, and so WHY IS IT HERE.
 };
 
 struct ServerJoinAcknowledgePacket {
@@ -43,6 +44,10 @@ struct ServerJoinAcknowledgePacket {
 	u8 client_id;
 	i32 frame;
 	World world_state;
+};
+
+struct ServerDisconnectPacket {
+	ServerPacketHeader header;
 };
 
 struct ServerStateUpdatePacket {
