@@ -90,7 +90,32 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	return platform_socket;
 }
 
-void platform_free_connection(PlatformSocket* socket, i8 connection_id)
+i32 platform_add_connection(PlatformSocket* socket, void* address)
+{
+	struct sockaddr_in* addr = (struct sockaddr_in*)address;
+	XlibSocket* sock = (XlibSocket*)socket->backend;
+
+	for(u32 i = 0; i < MAX_CLIENTS; i++) {
+		if(sock->id_to_connection[i] == -1) {
+			sock->id_to_connection[i] = sock->connections_len;
+
+			XlibConnection* new_connection = &sock->connections[sock->connections_len];
+			new_connection->address = (struct sockaddr_in)*addr;
+			new_connection->id = i;
+
+			sock->connections_len++;
+
+			printf("Server: Add client connection %u.\n", i);
+			return i;
+		}
+	}
+
+	printf("No free connections!\n");
+	panic();
+	return -1;
+}
+
+void platform_free_connection(PlatformSocket* socket, i32 connection_id)
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 	if(sock->id_to_connection[connection_id] != sock->connections_len - 1) {
@@ -103,7 +128,7 @@ void platform_free_connection(PlatformSocket* socket, i8 connection_id)
 }
 
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
-void xlib_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size)
+void xlib_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size)
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
@@ -133,7 +158,7 @@ void platform_update_sim_mode(PlatformSocket* socket, float dt)
 
 #endif
 
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size) {
+void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size) {
 #if NETWORK_SIM_MODE == true
 	if(random_float() < NETWORK_SIM_PACKET_LOSS_CHANCE) {
 		//printf("Artificial packet loss.\n");
@@ -198,28 +223,7 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 					}
 				}
 				if(!connection_already_exists) {
-					bool slot_found = false;
-					for(u32 i = 0; i < MAX_CLIENTS; i++) {
-						if(sock->id_to_connection[i] == -1) {
-							sock->id_to_connection[i] = sock->connections_len;
-							packet->connection_id = i;
-
-							XlibConnection* new_connection = &sock->connections[sock->connections_len];
-							new_connection->address = sender_address;
-							new_connection->id = i;
-
-							sock->connections_len++;
-							slot_found = true;
-
-							break;
-						}
-					}
-					// TODO: Handle too many connections more gracefully.
-					if(!slot_found) {
-						printf("No free connections!\n");
-						panic();
-					}
-					printf("Server: Add client connection.\n");
+					packet->connection_id = platform_add_connection(socket, &sender_address);
 				}
 			} else { // socket->type == SOCKET_TYPE_CLIENT
 				packet->connection_id = 0;

@@ -22,7 +22,7 @@
 
 struct SimPacket {
 	float countdown;
-	i8 connection_id;
+	i32 connection_id;
 	void* packet;
 	u32 size;
 };
@@ -50,7 +50,7 @@ struct PlatformPacket {
 	char* data;
 	u32 data_size;
 
-	i8 connection_id;
+	i32 connection_id;
 };
 
 struct PlatformPayload {
@@ -63,12 +63,15 @@ PlatformSocket* platform_init_server_socket(Arena* arena);
 // Opens a UDP socket for clients.
 PlatformSocket* platform_init_client_socket(Arena* arena);
 
+// Returns the connection id.
+i32 platform_add_connection(PlatformSocket* socket, void* address);
+
 // Opens a connection id to be used for another IP. Called after a client
 // disconnect or to reject a first-time connection, for instance.
-void platform_free_connection(PlatformSocket* socket, i8 connection_id);
+void platform_free_connection(PlatformSocket* socket, i32 connection_id);
 
 // Sends a network packet to given connection. Assumes the connection exists.
-void platform_send_packet(PlatformSocket* socket, i8 connection_id, void* packet, u32 size);
+void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size);
 
 // Pull all packets received since the previous call of this function. The
 // packets are allocated to the given memory arena, so remember to free it.
