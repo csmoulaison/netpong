@@ -99,13 +99,9 @@ void server_process_packets(Server* server)
 		i32 unfilled_slot;
 
 		switch(header->type) {
-			case CLIENT_PACKET_JOIN:
-				// NOW: This runs afoul, I do believe. The logic of this paragraph is not in
-				// agreement with the logic in the next, I think.
-				server_acknowledge_packet.header.type = SERVER_PACKET_JOIN_ACKNOWLEDGE;
+			case CLIENT_PACKET_REQUEST_CONNECTION:
+				server_acknowledge_packet.header.type = SERVER_PACKET_ACCEPT_CONNECTION;
 				server_acknowledge_packet.client_id = connection_id;
-				server_acknowledge_packet.frame = server->frame;
-				server_acknowledge_packet.world_state = server->world;
 				platform_send_packet(server->socket, connection_id, (void*)&server_acknowledge_packet, sizeof(ServerJoinAcknowledgePacket));
 
 				unfilled_slot = -1;
@@ -120,6 +116,9 @@ void server_process_packets(Server* server)
 				if(unfilled_slot != -1) {
 					printf("Acknowledging client join, adding client: %d\n", connection_id);
 				}
+				break;
+
+			case CLIENT_PACKET_JOIN_ACKNOWLEDGE:
 				break;
 			case CLIENT_PACKET_INPUT:
 				input_packet = (ClientInputPacket*)packet->data;

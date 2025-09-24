@@ -3,8 +3,9 @@
 #define FRAME_LENGTH_MOD 0.02f
 
 enum ClientConnectionState {
-	CLIENT_STATE_CONNECTING,
-	CLIENT_STATE_CONNECTED
+	CLIENT_STATE_ATTEMPTING_CONNECTION,
+	CLIENT_STATE_WAITING_TO_START,
+	CLIENT_STATE_ACTIVE
 };
 
 struct ClientWorldState {
@@ -61,6 +62,11 @@ Client* client_init(Platform* platform, Arena* arena)
 	}
 
 	return client;
+}
+
+void client_reset(Client* client)
+{
+
 }
 
 void client_simulate_frame(World* world, Client* client)
@@ -210,6 +216,9 @@ void client_process_packets(Client* client, Platform* platform)
 				}
 
 				break;
+			case SERVER_PACKET_DISCONNECT:
+				client->connection_state = CLIENT_STATE_CONNECTING;
+				break;
 			case SERVER_PACKET_STATE_UPDATE:
 				update_packet = (ServerStateUpdatePacket*)packet->data;
 				client_resolve_state_update(client, update_packet, platform);
@@ -325,6 +334,8 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 			// I like the blinky thing.
 			client->frame++; 
 			client_update_connecting(client, platform, render_state);
+			break;
+		case CLIENT_STATE_WAITING:
 			break;
 		case CLIENT_STATE_CONNECTED:
 			client_update_connected(client, platform, render_state);
