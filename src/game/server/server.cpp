@@ -1,9 +1,7 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
-// NOW: < THIS: packets
-// 
-// After: it would be good to thin out the platform layer as much as possible,
+// TODO: < NEXT: it would be good to thin out the platform layer as much as possible,
 // accreting its functionality to this. Specifically, the server should keep
 // track of storing incoming connections.
 // The platform layer is strictly for abstracting the platform details.
@@ -66,27 +64,35 @@ struct Server {
 	World world;
 };
 
-Server* server_init(Arena* arena)
+void server_reset(Server* server)
 {
-	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
-
-	server->state = SERVER_IDLE;
-	server->socket = platform_init_server_socket(arena);
 	server->frame = 0;
-
 	for(u8 i = 0; i < 2; i++) {
 		ServerConnection* connection = &server->connections[i];
-		connection->state = SERVER_CONNECTION_OPEN;
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			connection->inputs[j].frame = -1;
 			connection->inputs[j].input = {};
 		}
 	}
-
 	world_init(&server->world);
+}
+
+Server* server_init(Arena* arena)
+{
+	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
+	server->socket = platform_init_server_socket(arena);
+	for(u8 i = 0; i < 2; i++) {
+		ServerConnection* connection = &server->connections[i];
+		connection->state = SERVER_CONNECTION_OPEN;
+	}
+	server_reset(server);
 	return server;
 }
 
+// Responds to incoming network requests to join the game as a client, sending
+// back acceptance packets and setting the relevant connections to the PENDING
+// state, where we will wait until we receive a counter acknowledgement from the
+// new client.
 void server_handle_connection_request(Server* server, i8 connection_id)
 {
 	if(connection_id > 1) {
@@ -102,10 +108,15 @@ void server_handle_connection_request(Server* server, i8 connection_id)
 	ServerAcceptConnectionPacket accept_packet;
 	accept_packet.header.type = SERVER_PACKET_ACCEPT_CONNECTION;
 	accept_packet.client_id = connection_id;
-	platform_send_packet(server->socket, connection_id, (void*)&accept_packet, sizeof(ServerAcceptConnectionPacket));
+	platform_send_packet(server->socket, connection_id, (void*)&accept_packet, sizeof(accept_packet));
 
 }
 
+// Sets clients to the ACTIVE state in response to join acknowledgement packets,
+// which are sent to us in response to acceptance packets we sent when handling
+// connection requests.
+// Once both connections are in the ACTIVE state, the server update function
+// will use the active game codepath.
 void server_handle_join_acknowledge(Server* server, i8 connection_id)
 {
 	assert(connection_id <= 1);
@@ -113,24 +124,25 @@ void server_handle_join_acknowledge(Server* server, i8 connection_id)
 	if(server->connections[connection_id].state == SERVER_CONNECTION_PENDING) {
 		server->connections[connection_id].state = SERVER_CONNECTION_ACTIVE;
 		printf("Received client acknowledgement, setting client connected: %d\n", connection_id);
-
 	}
 }
 
-void server_handle_client_input(Server* server)
+// Stores newly recieved input in the relevant client's input buffer. These
+// buffered inputs are pulled from once every frame in the server active update
+// function.
+void server_handle_client_input(Server* server, i8 connection_id, ClientInputPacket* client_input)
 {
-	ClientInputPacket* input_packet = (ClientInputPacket*)packet->data;
-	ServerConnection* client = &server->connections[header->client_id];
+	ServerConnection* client = &server->connections[connection_id];
 
-	ClientInput* buffer_input = &client->inputs[input_packet->header.frame % INPUT_BUFFER_SIZE];
-	buffer_input->frame = input_packet->header.frame;
+	ClientInput* buffer_input = &client->inputs[client_input->frame % INPUT_BUFFER_SIZE];
+	buffer_input->frame = client_input->frame;
 
-	if(input_packet->input_move_up) {
+	if(client_input->input_move_up) {
 		buffer_input->input.move_up = 1.0f;
 	} else {
 		buffer_input->input.move_up = 0.0f;
 	}
-	if(input_packet->input_move_down) {
+	if(client_input->input_move_down) {
 		buffer_input->input.move_down = 1.0f;
 	} else {
 		buffer_input->input.move_down = 0.0f;
@@ -147,6 +159,7 @@ void server_process_packets(Server* server)
 
 	while(packet != nullptr) {
 		i8 connection_id = packet->connection_id;
+		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
 
 		switch(header->type) {
 			case CLIENT_PACKET_CONNECTION_REQUEST:
@@ -154,13 +167,133 @@ void server_process_packets(Server* server)
 			case CLIENT_PACKET_JOIN_ACKNOWLEDGE:
 				server_handle_join_acknowledge(server, connection_id); break;
 			case CLIENT_PACKET_INPUT:
-				server_handle_client_input(server); break;
+				server_handle_client_input(server, connection_id, (ClientInputPacket*)packet->data); break;
 			default: break;
 		}
 		packet = packet->next;
 	}
 	arena_destroy(&packet_arena);
+}
 
+// NOW: Do the following during idle update:
+// Nothing, I think. All the idle logic is handled by the packet stuff.
+// 
+// TODO: In general, it's probably best to process packets and then handle them
+// here. More centralized and decoupled from the network flow.
+//
+// It's the event queue from Quake, let's be honest, let's not mince words,
+// let's not break balls.
+void server_update_idle(Server* server)
+{
+	server->frame = 0;
+}
+
+// NOW: < THIS: Do the following during active update:
+// [X] Send update packets to connected clients.
+// [ ] If received disconnect: send end packet, free connection.
+// [X] If client timeout: send end packet, free connection.
+// [X] Send start game packets to all clients who haven't sent their first
+//     update.
+// [ ] When disconnecting: reset the server and connection state.
+void server_update_active(Server* server, float delta_time)
+{
+	for(u8 i = 0; i < 2; i++) {
+		ServerConnection* client = &server->connections[i];
+
+		i32 latest_frame_received = -1;
+		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
+			if(latest_frame_received < client->inputs[j].frame) {
+				latest_frame_received = client->inputs[j].frame;
+			}
+		}
+
+		// If we haven't received any input yet, keep telling the client that the game
+		// has started, and break from the loop here.
+		if(latest_frame_received == -1) {
+			ServerStartGamePacket start_packet;
+			start_packet.header.type = SERVER_PACKET_START_GAME;
+			platform_send_packet(server->socket, i, (void*)&start_packet, sizeof(start_packet));
+			break;
+		// Client speed up if the server is too far ahead, client slow down if the
+		// server is too far behind.
+		// TODO: We want the thresholds to be based on current average ping to this client.
+		} else if(latest_frame_received - server->frame < 3) {
+			ServerSpeedUpPacket speed_packet;
+			speed_packet.header.type = SERVER_PACKET_SPEED_UP;
+			//speed_packet.frame = server->frame;
+			platform_send_packet(server->socket, i, &speed_packet, sizeof(speed_packet));
+		} else if(latest_frame_received - server->frame > 5) {
+			ServerSlowDownPacket slow_packet;
+			slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
+			//slow_packet.frame = server->frame;
+			platform_send_packet(server->socket, i, &slow_packet, sizeof(slow_packet));
+		}
+
+		// Optimally, we want to use the client input that coincides with the frame
+		// the server is about to simulate, but if we don't have that frame, we will
+		// use the last received input in the buffer.
+		i32 effective_input_frame = server->frame;
+		if(latest_frame_received < server->frame) {
+			effective_input_frame = latest_frame_received;
+		} else {
+			while(client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].frame != effective_input_frame) {
+				effective_input_frame--;
+
+				// We have already exited the loop if we haven't received any frames yet,
+				// so this shouldn't fire.
+				assert(effective_input_frame >= 0);
+			}
+		}
+		if(effective_input_frame != server->frame) {
+			printf("Server: Missed a packet from client %u.\n", i);
+		}
+
+		// Client timeout. We haven't received any inputs from the client for
+		// INPUT_BUFFER_SIZE frames.
+		// TODO: We want to decouple this from the queue size, really. 
+		if(server->frame - effective_input_frame > INPUT_BUFFER_SIZE) {
+			ServerDisconnectPacket disconnect_packet;
+			disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
+			platform_send_packet(server->socket, i, &disconnect_packet, sizeof(disconnect_packet));
+
+			platform_free_connection(server->socket, i);
+			server->connections[i].state = SERVER_CONNECTION_OPEN;
+			printf("Freed connection %u.\n", i);
+
+			server_reset(server);
+		}
+
+		server->world.player_inputs[i] = client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].input;
+	}
+
+	// Simulate using client inputs.
+	world_simulate(&server->world, delta_time);
+
+	// Reset the game if the ball has exited the play area.
+	// 
+	// TODO: This is game logic, once we decouple this from the server, it will
+	// have to find it's way somewhere else.
+	if(server->world.ball_position[0] < -1.5f
+	|| server->world.ball_position[0] > 1.5f) {
+		// TODO: Should be world_init. Anything wrong with that?
+		server->world.ball_position[0] = 0.0f;
+		server->world.ball_position[1] = 0.0f;
+		server->world.ball_velocity[0] = 0.7f;
+		server->world.ball_velocity[1] = 0.35f;
+		server->world.paddle_positions[0] = 0.0f;
+		server->world.paddle_positions[1] = 0.0f;
+		server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
+	}
+
+	ServerWorldUpdatePacket update_packet = {};
+	update_packet.header.type = SERVER_PACKET_WORLD_UPDATE;
+	update_packet.frame = server->frame;
+	update_packet.world = server->world;
+
+	for(u8 i = 0; i < 2; i++) {
+		platform_send_packet(server->socket, i, &update_packet, sizeof(update_packet));
+	}
+	server->frame++;
 }
 
 void server_update(Server* server, float delta_time)
@@ -173,97 +306,9 @@ void server_update(Server* server, float delta_time)
 
 	if(server->connections[0].state == SERVER_CONNECTION_ACTIVE 
 	&& server->connections[1].state == SERVER_CONNECTION_ACTIVE) {
-		for(u8 i = 0; i < 2; i++) {
-			// NOW: Moved this up from a loop that previously existed outside of this one.
-			// Is it in any way redundant with below?
-			// REFERENCE MARK: YUPEE
-			i32 latest_frame = 0;
-			for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
-				if(latest_frame < client->inputs[j].frame) {
-					latest_frame = client->inputs[j].frame;
-				}
-			}
-
-			// TODO: We want these thresholds to be set by measuring the ping for each
-			// individual client.
-			if(latest_frame - server->frame < 3) {
-				ServerSpeedUpPacket speed_packet;
-				speed_packet.header.type = SERVER_PACKET_SPEED_UP;
-				speed_packet.header.frame = server->frame;
-				platform_send_packet(server->socket, i, &speed_packet, sizeof(ServerSpeedUpPacket));
-			} else if(latest_frame - server->frame > 5) {
-				ServerSlowDownPacket slow_packet;
-				slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
-				slow_packet.header.frame = server->frame;
-				platform_send_packet(server->socket, i, &slow_packet, sizeof(ServerSlowDownPacket));
-			}
-
-			// NOW: Start game packet if we haven't received anything from this client yet.
-			if(?) {
-				ServerStartGamePacket start_packet;
-				start_packet.header.type = SERVER_PACKET_ACCEPT_CONNECTION;
-				start_packet.client_id = i;
-				platform_send_packet(server->socket, i, (void*)&start_packet, sizeof(ServerStartGamePacket));
-			}
-
-			// REFERENCE MARK: YUPEE
-			i32 last_input_frame = server->frame;
-			while(client->inputs[last_input_frame % INPUT_BUFFER_SIZE].frame != last_input_frame) {
-				last_input_frame--;
-				if(last_input_frame <= 0) {
-					//printf("Server: No inputs yet from client %u.\n", i);
-					last_input_frame = 0;
-					break;
-				}
-			}
-
-			if(last_input_frame != 0 && server->frame - last_input_frame > INPUT_BUFFER_SIZE) {
-				// NOW: This is the client timeout. Is it working?
-				ServerDisconnectPacket disconnect_packet;
-				disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
-				disconnect_packet.header.frame = 0;
-				platform_send_packet(server->socket, i, &disconnect_packet, sizeof(ServerDisconnectPacket));
-
-				platform_free_connection(server->socket, i);
-				server->connections[i].connected = false;
-				printf("Freed connection %u.\n", i);
-			}
-
-			server->world.player_inputs[i] = client->inputs[last_input_frame % INPUT_BUFFER_SIZE].input;
-
-			if(last_input_frame != server->frame) {
-				printf("Server: Missed a packet from client %u.\n", i);
-			}
-		}
-
-		world_simulate(&server->world, delta_time);
-
-		if(server->world.ball_position[0] < -1.5f
-		|| server->world.ball_position[0] > 1.5f) {
-			// TODO: Should be world_init. Anything wrong with that?
-			server->world.ball_position[0] = 0.0f;
-			server->world.ball_position[1] = 0.0f;
-			server->world.ball_velocity[0] = 0.7f;
-			server->world.ball_velocity[1] = 0.35f;
-			server->world.paddle_positions[0] = 0.0f;
-			server->world.paddle_positions[1] = 0.0f;
-			server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
-		}
-
-		ServerStateUpdatePacket update_packet = {};
-		update_packet.header.type = SERVER_PACKET_STATE_UPDATE;
-		update_packet.header.frame = server->frame;
-		update_packet.world_state = server->world;
-
-		for(u8 i = 0; i < 2; i++) {
-			if(server->connections[i].connected) {
-				platform_send_packet(server->socket, i, &update_packet, sizeof(ServerStateUpdatePacket));
-			}
-		}
-
-		server->frame++;
+		server_update_active(server, delta_time);
 	} else {
-		server->frame = 0;
+		server_update_idle(server);
 	}
 }
 

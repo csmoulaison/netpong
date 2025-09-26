@@ -3,7 +3,7 @@
 #define FRAME_LENGTH_MOD 0.02f
 
 enum ClientConnectionState {
-	CLIENT_STATE_ATTEMPTING_CONNECTION,
+	CLIENT_STATE_REQUESTING_CONNECTION,
 	CLIENT_STATE_WAITING_TO_START,
 	CLIENT_STATE_ACTIVE
 };
@@ -41,7 +41,7 @@ Client* client_init(Platform* platform, Arena* arena)
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
 	client->socket = platform_init_client_socket(arena);
-	client->connection_state = CLIENT_STATE_CONNECTING;
+	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
 	client->id = 0;
 	client->close_requested = false;
 
@@ -126,7 +126,7 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
 	input_packet.header.client_id = client->id;
-	input_packet.header.frame = client->frame;
+	input_packet.frame = client->frame;
 	input_packet.input_move_up = (world->player_inputs[client->id].move_up > 0.0f);
 	input_packet.input_move_down = (world->player_inputs[client->id].move_down > 0.0f);
 	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
@@ -134,9 +134,9 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	client->frame++;
 }
 
-void client_resolve_state_update(Client* client, ServerStateUpdatePacket* server_update, Platform* platform)
+void client_resolve_state_update(Client* client, ServerWorldUpdatePacket* server_update, Platform* platform)
 {
-	i32 update_frame = server_update->header.frame;
+	i32 update_frame = server_update->frame;
 	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
 
 	//assert(client->states[update_frame_index].frame == update_frame);
@@ -189,7 +189,7 @@ void client_process_packets(Client* client, Platform* platform)
 	while(packet != nullptr) {
 		ServerPacketHeader* header = (ServerPacketHeader*)packet->data;
 		ServerJoinAcknowledgePacket* server_acknowledge_packet;
-		ServerStateUpdatePacket* update_packet;
+		ServerWorldUpdatePacket* update_packet;
 
 		ClientJoinAcknowledgePacket client_acknowledge_packet;
 
@@ -220,7 +220,7 @@ void client_process_packets(Client* client, Platform* platform)
 				client->connection_state = CLIENT_STATE_CONNECTING;
 				break;
 			case SERVER_PACKET_STATE_UPDATE:
-				update_packet = (ServerStateUpdatePacket*)packet->data;
+				update_packet = (ServerWorldUpdatePacket*)packet->data;
 				client_resolve_state_update(client, update_packet, platform);
 				break;
 			case SERVER_PACKET_SPEED_UP:
