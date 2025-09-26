@@ -162,7 +162,7 @@ void server_process_packets(Server* server)
 		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
 
 		switch(header->type) {
-			case CLIENT_PACKET_CONNECTION_REQUEST:
+			case CLIENT_PACKET_REQUEST_CONNECTION:
 				server_handle_connection_request(server, connection_id); break;
 			case CLIENT_PACKET_JOIN_ACKNOWLEDGE:
 				server_handle_join_acknowledge(server, connection_id); break;
@@ -188,13 +188,13 @@ void server_update_idle(Server* server)
 	server->frame = 0;
 }
 
-// NOW: < THIS: Do the following during active update:
+// NOW: Do the following during active update:
 // [X] Send update packets to connected clients.
 // [ ] If received disconnect: send end packet, free connection.
 // [X] If client timeout: send end packet, free connection.
 // [X] Send start game packets to all clients who haven't sent their first
 //     update.
-// [ ] When disconnecting: reset the server and connection state.
+// [X] When disconnecting: reset the server and connection state.
 void server_update_active(Server* server, float delta_time)
 {
 	for(u8 i = 0; i < 2; i++) {
@@ -241,6 +241,7 @@ void server_update_active(Server* server, float delta_time)
 
 				// We have already exited the loop if we haven't received any frames yet,
 				// so this shouldn't fire.
+				// NOW: We are firing this on our first try, lol.
 				assert(effective_input_frame >= 0);
 			}
 		}

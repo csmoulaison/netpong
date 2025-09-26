@@ -2,6 +2,15 @@
 
 #define FRAME_LENGTH_MOD 0.02f
 
+// NOW: < THIS: We are now doing for clients what we did for the server,
+// implementing all the planned logic and hoping all goes well.
+// 
+// As of right now the packets all have at least stub handling functions setup.
+// We need to make sure the implementation of those is good, and we haven't even
+// touched any of the update loop stuff.
+//
+// Time for a fine toothed comb the same way we did the server stuff.
+
 enum ClientConnectionState {
 	CLIENT_STATE_REQUESTING_CONNECTION,
 	CLIENT_STATE_WAITING_TO_START,
@@ -62,11 +71,6 @@ Client* client_init(Platform* platform, Arena* arena)
 	}
 
 	return client;
-}
-
-void client_reset(Client* client)
-{
-
 }
 
 void client_simulate_frame(World* world, Client* client)
@@ -134,7 +138,7 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	client->frame++;
 }
 
-void client_resolve_state_update(Client* client, ServerWorldUpdatePacket* server_update, Platform* platform)
+void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_update, Platform* platform)
 {
 	i32 update_frame = server_update->frame;
 	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
@@ -150,7 +154,7 @@ void client_resolve_state_update(Client* client, ServerWorldUpdatePacket* server
 	}
 
 	World* client_state = &client->states[update_frame_index].world;
-	World* server_state = &server_update->world_state;
+	World* server_state = &server_update->world;
 
 	// If the states are equal, client side prediction was successful and we do not
 	// need to resimulate.
@@ -178,6 +182,51 @@ void client_resolve_state_update(Client* client, ServerWorldUpdatePacket* server
 	}
 }
 
+void client_handle_accept_connection(Client* client, ServerAcceptConnectionPacket* accept_packet)
+{
+	if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
+		client->id = accept_packet->client_id;
+		client->connection_state = CLIENT_STATE_WAITING_TO_START;
+		printf("Recieved connection acceptance from server.\n");
+	}
+
+	ClientJoinAcknowledgePacket acknowledge_packet;
+	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
+	acknowledge_packet.header.client_id = client->id;
+	platform_send_packet(client->socket, 0, &acknowledge_packet, sizeof(acknowledge_packet));
+}
+
+void client_handle_start_game(Client* client, Platform* platform)
+{
+	client->connection_state = CLIENT_STATE_ACTIVE;
+
+	// NOW: Set state to the initial state. We are no longer receiving this
+	// authoritatively from the server.
+	for(i8 i = 0; i < 6; i++) {
+		client_simulate_and_advance_frame(client, platform);
+	}
+}
+
+void client_handle_end_game(Client* client)
+{
+	client->connection_state = CLIENT_STATE_WAITING_TO_START;
+}
+
+void client_handle_disconnect(Client* client)
+{
+	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
+}
+
+void client_handle_speed_up(Client* client)
+{
+	client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+}
+
+void client_handle_slow_down(Client* client)
+{
+	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+}
+
 void client_process_packets(Client* client, Platform* platform)
 {
 	// TODO: this is dirty shit dude. arena_create should be able to allocate from
@@ -187,50 +236,22 @@ void client_process_packets(Client* client, Platform* platform)
 	PlatformPacket* packet = payload.head;
 
 	while(packet != nullptr) {
-		ServerPacketHeader* header = (ServerPacketHeader*)packet->data;
-		ServerJoinAcknowledgePacket* server_acknowledge_packet;
-		ServerWorldUpdatePacket* update_packet;
-
-		ClientJoinAcknowledgePacket client_acknowledge_packet;
-
+		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
 		switch(header->type) {
-			case SERVER_PACKET_JOIN_ACKNOWLEDGE:
-				if(client->connection_state != CLIENT_STATE_CONNECTING) {
-					break;
-				}
-
-				server_acknowledge_packet = (ServerJoinAcknowledgePacket*)packet->data;
-				client->id = server_acknowledge_packet->client_id;
-				client->frame = server_acknowledge_packet->frame;
-				client->connection_state = CLIENT_STATE_CONNECTED;
-				client->states[client->frame % WORLD_STATE_BUFFER_SIZE].world = server_acknowledge_packet->world_state;
-				printf("Recieved join acknowledgment from server.\n");
-
-				client_acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
-				client_acknowledge_packet.header.client_id = client->id;
-				client_acknowledge_packet.header.frame = client->frame;
-				platform_send_packet(client->socket, 0, &client_acknowledge_packet, sizeof(ClientJoinAcknowledgePacket));
-
-				for(i8 i = 0; i < 6; i++) {
-					client_simulate_and_advance_frame(client, platform);
-				}
-
-				break;
+			case SERVER_PACKET_WORLD_UPDATE:
+				client_handle_world_update(client, (ServerWorldUpdatePacket*)packet->data, platform); break;
+			case SERVER_PACKET_ACCEPT_CONNECTION:
+				client_handle_accept_connection(client, (ServerAcceptConnectionPacket*)packet->data); break;
+			case SERVER_PACKET_START_GAME:
+				client_handle_start_game(client, platform); break;
+			case SERVER_PACKET_END_GAME:
+				client_handle_end_game(client); break;
 			case SERVER_PACKET_DISCONNECT:
-				client->connection_state = CLIENT_STATE_CONNECTING;
-				break;
-			case SERVER_PACKET_STATE_UPDATE:
-				update_packet = (ServerWorldUpdatePacket*)packet->data;
-				client_resolve_state_update(client, update_packet, platform);
-				break;
+				client_handle_disconnect(client); break;
 			case SERVER_PACKET_SPEED_UP:
-				//printf("SPEED\n");
-				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
-				break;
+				client_handle_slow_down(client); break;
 			case SERVER_PACKET_SLOW_DOWN:
-				//printf("SLOW\n");
-				client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
-				break;
+				client_handle_slow_down(client); break;
 			default: break;
 		}
 		packet = packet->next;
@@ -251,11 +272,11 @@ void client_render_box(RenderState* render_state, Rect box, Platform* platform)
 	rect->h = box.h;
 }
 
-void client_update_connecting(Client* client, Platform* platform, RenderState* render_state)
+void client_update_requesting_connection(Client* client, Platform* platform, RenderState* render_state)
 {
-	ClientJoinPacket join_packet;
-	join_packet.header.type = CLIENT_PACKET_JOIN;
-	platform_send_packet(client->socket, 0, (void*)&join_packet, sizeof(ClientJoinPacket));
+	ClientRequestConnectionPacket request_packet;
+	request_packet.header.type = CLIENT_PACKET_REQUEST_CONNECTION;
+	platform_send_packet(client->socket, 0, (void*)&request_packet, sizeof(request_packet));
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -273,6 +294,22 @@ void client_update_connecting(Client* client, Platform* platform, RenderState* r
 	}
 }
 
+void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
+{
+	// Render "connecting" indicator.
+	for(u8 i = 0; i < 3; i++) {
+		float xoff = 0.0f;
+		xoff += ((client->frame / 30) % 3) * 0.025;
+
+		Rect box;
+		box.x = -0.75f + xoff;
+		box.y = 0.75f;
+		box.w = 0.025f;
+		box.h = 0.025f;
+		client_render_box(render_state, box, platform);
+	}
+}
+
 void client_visual_lerp(float* visual, float real, float dt)
 {
 	*visual = lerp(*visual, real, VISUAL_SMOOTHING_SPEED * dt);
@@ -281,7 +318,7 @@ void client_visual_lerp(float* visual, float real, float dt)
 	}
 }
 
-void client_update_connected(Client* client, Platform* platform, RenderState* render_state)
+void client_update_active(Client* client, Platform* platform, RenderState* render_state)
 {
 	client_simulate_and_advance_frame(client, platform);
 
@@ -329,16 +366,17 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 #endif
 	
 	switch(client->connection_state) {
-		case CLIENT_STATE_CONNECTING:
+		case CLIENT_STATE_REQUESTING_CONNECTION:
 			// TODO: This is just for the blinky thing. Dumb reason to have it here but
 			// I like the blinky thing.
 			client->frame++; 
-			client_update_connecting(client, platform, render_state);
+			client_update_requesting_connection(client, platform, render_state);
 			break;
-		case CLIENT_STATE_WAITING:
+		case CLIENT_STATE_WAITING_TO_START:
+			client_update_waiting_to_start(client, platform, render_state);
 			break;
-		case CLIENT_STATE_CONNECTED:
-			client_update_connected(client, platform, render_state);
+		case CLIENT_STATE_ACTIVE:
+			client_update_active(client, platform, render_state);
 			break;
 		default: break;
 	}
