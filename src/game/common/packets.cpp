@@ -11,7 +11,7 @@
 
 // Client packets
 enum ClientPacketType {
-	CLIENT_PACKET_REQUEST_CONNECTION,
+	CLIENT_PACKET_CONNECTION_REQUEST,
 	CLIENT_PACKET_JOIN_ACKNOWLEDGE,
 	CLIENT_PACKET_INPUT
 };
@@ -51,7 +51,7 @@ struct ServerPacketHeader {
 	ServerPacketType type;
 };
 
-struct ServerJoinAcknowledgePacket {
+struct ServerAcceptConnectionPacket {
 	ServerPacketHeader header;
 	u8 client_id;
 };
