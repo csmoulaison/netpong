@@ -36,6 +36,21 @@ struct Client {
 	float visual_paddle_positions[2];
 };
 
+// Utility functions
+ClientWorldState* client_state_from_frame(Client* client, i32 frame)
+{
+	return &client->states[frame % WORLD_STATE_BUFFER_SIZE];
+}
+
+i8 client_get_other_id(Client* client)
+{
+	if(client->id == 0) {
+		return 1;
+	}
+	return 0;
+}
+
+// Initialization functions
 void client_reset_game(Client* client)
 {
 	client->frame = 0;
@@ -69,6 +84,7 @@ Client* client_init(Platform* platform, Arena* arena)
 	return client;
 }
 
+// Frame simulation functions
 void client_simulate_frame(World* world, Client* client)
 {
 	// TODO: This is kind of a big huge thing I missed. The frame_length is being
@@ -83,11 +99,7 @@ void client_simulate_frame(World* world, Client* client)
 	// client_simulate_frame with the frame length.
 	world_simulate(world, client->frame_length);
 
-	i8 other_id = 0;
-	if(client->id == 0) {
-		other_id = 1;
-	}
-
+	i8 other_id = client_get_other_id(client);
 	// TODO: Test input attenuation against intended case.
 	world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_up < 0.0f) {
@@ -101,14 +113,16 @@ void client_simulate_frame(World* world, Client* client)
 
 void client_simulate_and_advance_frame(Client* client, Platform* platform)
 {
-	i32 prev_frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
-	i32 frame_index = client->frame % WORLD_STATE_BUFFER_SIZE;
+	ClientWorldState* previous_state = client_state_from_frame(client, client->frame - 1);
+	ClientWorldState* current_state = client_state_from_frame(client, client->frame);
+
 	if(client->frame > 0) {
-		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
+		memcpy(&current_state->world, &previous_state->world, sizeof(World));
 	}
 
-	client->states[frame_index].frame = client->frame;
-	World* world = &client->states[frame_index].world;
+	current_state->frame = client->frame;
+	World* world = &current_state->world;
+
 	if(platform_button_down(platform, client->button_move_up)) {
 		world->player_inputs[client->id].move_up = 1.0f;
 	} else {
@@ -121,7 +135,7 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	}
 	client_simulate_frame(world, client);
 
-	// TODO: Send sliding window of inputs so that the server can check for holes
+	// NOW: Send sliding window of inputs so that the server can check for holes
 	// in what it has received.
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
@@ -134,22 +148,22 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	client->frame++;
 }
 
+// Packet handling functions
 void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_update, Platform* platform)
 {
 	i32 update_frame = server_update->frame;
-	i32 update_frame_index = update_frame % WORLD_STATE_BUFFER_SIZE;
+	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
 
-	//assert(client->states[update_frame_index].frame == update_frame);
-	if(client->states[update_frame_index].frame != update_frame) {
-		//printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client->states[update_frame_index].frame, update_frame);
+	if(update_state->frame != update_frame) {
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
-
 		while(client->frame < update_frame + 1) {
 			client_simulate_and_advance_frame(client, platform);
 		}
+
+		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
 	}
 
-	World* client_state = &client->states[update_frame_index].world;
+	World* client_state = &update_state->world;
 	World* server_state = &server_update->world;
 
 	// If the states are equal, client side prediction was successful and we do not
@@ -165,16 +179,15 @@ void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_
 	memcpy(client_state, server_state, sizeof(World));
 
 	for(i32 i = update_frame + 1; i <= client->frame; i++) {
-		i32 prev_frame_index = (i - 1) % WORLD_STATE_BUFFER_SIZE;
-		i32 frame_index = i % WORLD_STATE_BUFFER_SIZE;
+		World* previous_world = &client_state_from_frame(client, i - 1)->world;
+		World* current_world = &client_state_from_frame(client, i)->world;
 
-		PlayerInput cached_player_input = client->states[frame_index].world.player_inputs[client->id];
-		memcpy(&client->states[frame_index].world, &client->states[prev_frame_index].world, sizeof(World));
+		PlayerInput cached_player_input = current_world->player_inputs[client->id];
+		memcpy(current_world, previous_world, sizeof(World));
 
-		World* world = &client->states[frame_index].world;
-		world->player_inputs[client->id] = cached_player_input;
+		current_world->player_inputs[client->id] = cached_player_input;
 
-		client_simulate_frame(world, client);
+		client_simulate_frame(current_world, client);
 	}
 }
 
@@ -188,6 +201,7 @@ void client_handle_accept_connection(Client* client, ServerAcceptConnectionPacke
 	if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
 		client->id = accept_packet->client_id;
 		client->connection_state = CLIENT_STATE_WAITING_TO_START;
+
 		printf("Recieved connection acceptance from server.\n");
 	}
 }
@@ -200,6 +214,7 @@ void client_handle_start_game(Client* client, Platform* platform)
 	for(i8 i = 0; i < 6; i++) {
 		client_simulate_and_advance_frame(client, platform);
 	}
+
 	printf("Received start game notice from server.\n");
 }
 
@@ -207,6 +222,7 @@ void client_handle_end_game(Client* client)
 {
 	client->connection_state = CLIENT_STATE_WAITING_TO_START;
 	client_reset_game(client);
+
 	printf("Received end game notice from server.\n");
 }
 
@@ -215,6 +231,7 @@ void client_handle_disconnect(Client* client)
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
 	client->id = -1;
 	client_reset_game(client);
+	
 	printf("Received disconnect notice from server.\n");
 }
 
@@ -260,6 +277,7 @@ void client_process_packets(Client* client, Platform* platform)
 	arena_destroy(&packet_arena);
 }
 
+// Client update functions
 void client_render_box(RenderState* render_state, Rect box, Platform* platform)
 {
 	float x_scale = (float)platform->window_height / platform->window_width;
@@ -328,16 +346,12 @@ void client_update_active(Client* client, Platform* platform, RenderState* rende
 {
 	client_simulate_and_advance_frame(client, platform);
 
-	// TODO: Probably make a utility function.
-	i32 frame_index = (client->frame - 1) % WORLD_STATE_BUFFER_SIZE;
-	World* world = &client->states[frame_index].world;
+	World* world = &client_state_from_frame(client, client->frame - 1)->world;
 
 	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
 	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
-	i8 other_id = 0;
-	if(client->id == 0) {
-		other_id = 1;
-	}
+
+	i8 other_id = client_get_other_id(client);
 	client_visual_lerp(&client->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
 	client->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
 
