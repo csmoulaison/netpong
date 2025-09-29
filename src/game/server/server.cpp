@@ -64,7 +64,7 @@ struct Server {
 	World world;
 };
 
-void server_reset(Server* server)
+void server_reset_game(Server* server)
 {
 	server->frame = 0;
 	for(u8 i = 0; i < 2; i++) {
@@ -85,7 +85,7 @@ Server* server_init(Arena* arena)
 		ServerConnection* connection = &server->connections[i];
 		connection->state = SERVER_CONNECTION_OPEN;
 	}
-	server_reset(server);
+	server_reset_game(server);
 	return server;
 }
 
@@ -137,6 +137,8 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 	ClientInput* buffer_input = &client->inputs[client_input->frame % INPUT_BUFFER_SIZE];
 	buffer_input->frame = client_input->frame;
 
+	//printf("RECEIVE CLIENT %u INPUT: frame %i\n", connection_id, client_input->frame);
+
 	if(client_input->input_move_up) {
 		buffer_input->input.move_up = 1.0f;
 	} else {
@@ -175,9 +177,6 @@ void server_process_packets(Server* server)
 	arena_destroy(&packet_arena);
 }
 
-// NOW: Do the following during idle update:
-// Nothing, I think. All the idle logic is handled by the packet stuff.
-// 
 // TODO: In general, it's probably best to process packets and then handle them
 // here. More centralized and decoupled from the network flow.
 //
@@ -188,13 +187,6 @@ void server_update_idle(Server* server)
 	server->frame = 0;
 }
 
-// NOW: Do the following during active update:
-// [X] Send update packets to connected clients.
-// [ ] If received disconnect: send end packet, free connection.
-// [X] If client timeout: send end packet, free connection.
-// [X] Send start game packets to all clients who haven't sent their first
-//     update.
-// [X] When disconnecting: reset the server and connection state.
 void server_update_active(Server* server, float delta_time)
 {
 	for(u8 i = 0; i < 2; i++) {
@@ -213,7 +205,8 @@ void server_update_active(Server* server, float delta_time)
 			ServerStartGamePacket start_packet;
 			start_packet.header.type = SERVER_PACKET_START_GAME;
 			platform_send_packet(server->socket, i, (void*)&start_packet, sizeof(start_packet));
-			break;
+			printf("Server: Sent start game packet to client%u.\n", i);
+			continue;
 		// Client speed up if the server is too far ahead, client slow down if the
 		// server is too far behind.
 		// TODO: We want the thresholds to be based on current average ping to this client.
@@ -241,7 +234,6 @@ void server_update_active(Server* server, float delta_time)
 
 				// We have already exited the loop if we haven't received any frames yet,
 				// so this shouldn't fire.
-				// NOW: We are firing this on our first try, lol.
 				assert(effective_input_frame >= 0);
 			}
 		}
@@ -261,7 +253,17 @@ void server_update_active(Server* server, float delta_time)
 			server->connections[i].state = SERVER_CONNECTION_OPEN;
 			printf("Freed connection %u.\n", i);
 
-			server_reset(server);
+			i32 other_id = 0;
+			if(i == 0) {
+				other_id = 1;
+			}
+			ServerEndGamePacket end_packet;
+			end_packet.header.type = SERVER_PACKET_END_GAME;
+			platform_send_packet(server->socket, other_id, &end_packet, sizeof(end_packet));
+			printf("Sent end game packet to %u.\n", other_id);
+
+			server_reset_game(server);
+			return;
 		}
 
 		server->world.player_inputs[i] = client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].input;

@@ -2,15 +2,6 @@
 
 #define FRAME_LENGTH_MOD 0.02f
 
-// NOW: < THIS: We are now doing for clients what we did for the server,
-// implementing all the planned logic and hoping all goes well.
-// 
-// As of right now the packets all have at least stub handling functions setup.
-// We need to make sure the implementation of those is good, and we haven't even
-// touched any of the update loop stuff.
-//
-// Time for a fine toothed comb the same way we did the server stuff.
-
 enum ClientConnectionState {
 	CLIENT_STATE_REQUESTING_CONNECTION,
 	CLIENT_STATE_WAITING_TO_START,
@@ -28,7 +19,7 @@ struct Client {
 	PlatformSocket* socket;
 
 	ClientConnectionState connection_state;
-	u8 id;
+	i8 id;
 	bool close_requested;
 
 	// The buffer holds present and past states of the game simulation.
@@ -45,30 +36,35 @@ struct Client {
 	float visual_paddle_positions[2];
 };
 
+void client_reset_game(Client* client)
+{
+	client->frame = 0;
+	client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
+
+	for(i32 i = 0; i < WORLD_STATE_BUFFER_SIZE; i++) {
+		client->states[i].frame = -1;
+
+		// TODO: Theoretically, we don't need to do this, eh? I figure we might as
+		// well and figure out if we need to later.
+		client->states[i].world = {};
+		world_init(&client->states[i].world);
+	}
+}
+
 Client* client_init(Platform* platform, Arena* arena)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
 	client->socket = platform_init_client_socket(arena);
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
-	client->id = 0;
+	client->id = -1;
 	client->close_requested = false;
-
-	client->frame = 0;
-	client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 
 	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
 	client->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
-	for(i32 i = 0; i < WORLD_STATE_BUFFER_SIZE; i++) {
-		client->states[i].frame = -1;
-
-		// TODO: Theoretically, we don't need to do this, eh? I just figured we might
-		// as well and figure out optimizations later.
-		client->states[i].world = {};
-		world_init(&client->states[i].world);
-	}
+	client_reset_game(client);
 
 	return client;
 }
@@ -87,7 +83,7 @@ void client_simulate_frame(World* world, Client* client)
 	// client_simulate_frame with the frame length.
 	world_simulate(world, client->frame_length);
 
-	u8 other_id = 0;
+	i8 other_id = 0;
 	if(client->id == 0) {
 		other_id = 1;
 	}
@@ -145,7 +141,7 @@ void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_
 
 	//assert(client->states[update_frame_index].frame == update_frame);
 	if(client->states[update_frame_index].frame != update_frame) {
-		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client->states[update_frame_index].frame, update_frame);
+		//printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client->states[update_frame_index].frame, update_frame);
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 
 		while(client->frame < update_frame + 1) {
@@ -182,6 +178,11 @@ void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_
 	}
 }
 
+// Our request to connect has been accepted by the server, so we store our
+// newly received client id and switch to the WAITING_TO_START state.
+// 
+// In this state, we will continually send back a counter acknowledgement so the
+// server knows we are ready. This happens in the client update loop.
 void client_handle_accept_connection(Client* client, ServerAcceptConnectionPacket* accept_packet)
 {
 	if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
@@ -189,32 +190,32 @@ void client_handle_accept_connection(Client* client, ServerAcceptConnectionPacke
 		client->connection_state = CLIENT_STATE_WAITING_TO_START;
 		printf("Recieved connection acceptance from server.\n");
 	}
-
-	ClientJoinAcknowledgePacket acknowledge_packet;
-	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
-	acknowledge_packet.header.client_id = client->id;
-	platform_send_packet(client->socket, 0, &acknowledge_packet, sizeof(acknowledge_packet));
 }
 
+// The server wants us to start the game, so we simulate some advance frames and
+// enter the ACTIVE state.
 void client_handle_start_game(Client* client, Platform* platform)
 {
 	client->connection_state = CLIENT_STATE_ACTIVE;
-
-	// NOW: Set state to the initial state. We are no longer receiving this
-	// authoritatively from the server.
 	for(i8 i = 0; i < 6; i++) {
 		client_simulate_and_advance_frame(client, platform);
 	}
+	printf("Received start game notice from server.\n");
 }
 
 void client_handle_end_game(Client* client)
 {
 	client->connection_state = CLIENT_STATE_WAITING_TO_START;
+	client_reset_game(client);
+	printf("Received end game notice from server.\n");
 }
 
 void client_handle_disconnect(Client* client)
 {
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
+	client->id = -1;
+	client_reset_game(client);
+	printf("Received disconnect notice from server.\n");
 }
 
 void client_handle_speed_up(Client* client)
@@ -296,6 +297,11 @@ void client_update_requesting_connection(Client* client, Platform* platform, Ren
 
 void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
 {
+	ClientJoinAcknowledgePacket acknowledge_packet;
+	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
+	acknowledge_packet.header.client_id = client->id;
+	platform_send_packet(client->socket, 0, &acknowledge_packet, sizeof(acknowledge_packet));
+
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
 		float xoff = 0.0f;
@@ -328,7 +334,7 @@ void client_update_active(Client* client, Platform* platform, RenderState* rende
 
 	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
 	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
-	u8 other_id = 0;
+	i8 other_id = 0;
 	if(client->id == 0) {
 		other_id = 1;
 	}
@@ -367,9 +373,6 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 	
 	switch(client->connection_state) {
 		case CLIENT_STATE_REQUESTING_CONNECTION:
-			// TODO: This is just for the blinky thing. Dumb reason to have it here but
-			// I like the blinky thing.
-			client->frame++; 
 			client_update_requesting_connection(client, platform, render_state);
 			break;
 		case CLIENT_STATE_WAITING_TO_START:
