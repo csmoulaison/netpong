@@ -1,3 +1,4 @@
+mkdir ../bin
 cp -r fonts ../bin/fonts
 cp -r ../src/shaders ../bin/shaders
 
