@@ -1,5 +1,5 @@
-cp -r fonts ../bin/
-cp -r ../src/shaders ../bin/
+cp -r fonts ../bin/fonts
+cp -r ../src/shaders ../bin/shaders
 
 g++ -g -o ../bin/netpong \
 	../src/game/client/main.cpp ../src/platform/xlib/xlib_media.cpp ../src/platform/xlib/xlib_network.cpp ../src/platform/xlib/xlib_time.cpp ../src/renderer/opengl/opengl.cpp \
