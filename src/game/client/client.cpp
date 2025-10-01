@@ -140,9 +140,20 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
 	input_packet.header.client_id = client->id;
-	input_packet.frame = client->frame;
-	input_packet.input_move_up = (world->player_inputs[client->id].move_up > 0.0f);
-	input_packet.input_move_down = (world->player_inputs[client->id].move_down > 0.0f);
+	input_packet.latest_frame = client->frame;
+
+	input_packet.oldest_frame = client->frame - INPUT_WINDOW_FRAMES;
+	if(input_packet.oldest_frame < 0) { 
+		input_packet.oldest_frame = 0;
+	}
+
+	i32 frame_delta = input_packet.latest_frame - input_packet.oldest_frame;
+	for(i32 i = 0; i < frame_delta; i++) {
+		World* input_world = &client_state_from_frame(client, client->frame - frame_delta + i)->world;
+		input_packet.input_moves_up[i] = (input_world->player_inputs[client->id].move_up > 0.0f);
+		input_packet.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
+	}
+
 	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
 
 	client->frame++;

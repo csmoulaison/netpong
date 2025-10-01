@@ -31,9 +31,10 @@ struct ClientJoinAcknowledgePacket {
 
 struct ClientInputPacket {
 	ClientPacketHeader header;
-	i32 frame;
-	bool input_move_up;
-	bool input_move_down;
+	i32 latest_frame;
+	i32 oldest_frame;
+	bool input_moves_up[INPUT_WINDOW_FRAMES];
+	bool input_moves_down[INPUT_WINDOW_FRAMES];
 };
 
 // Server packets

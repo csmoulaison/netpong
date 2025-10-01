@@ -134,20 +134,28 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 {
 	ServerConnection* client = &server->connections[connection_id];
 
-	ClientInput* buffer_input = &client->inputs[client_input->frame % INPUT_BUFFER_SIZE];
-	buffer_input->frame = client_input->frame;
+	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
+	printf("Server: Frame delta: %i for client %i.\n", frame_delta, connection_id);
+	for(i32 i = 0; i < frame_delta; i++) {
+		// NOW: Getting list of inputs and filling them in.
+		// - Are we doing all this frame selection right?
+		// - Don't overwrite if we've already received it.
 
-	//printf("RECEIVE CLIENT %u INPUT: frame %i\n", connection_id, client_input->frame);
+		// should only go back the amount of the delta.
+		i32 input_frame = client_input->latest_frame - frame_delta + i;
+		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
+		buffer_input->frame = input_frame;
 
-	if(client_input->input_move_up) {
-		buffer_input->input.move_up = 1.0f;
-	} else {
-		buffer_input->input.move_up = 0.0f;
-	}
-	if(client_input->input_move_down) {
-		buffer_input->input.move_down = 1.0f;
-	} else {
-		buffer_input->input.move_down = 0.0f;
+		if(client_input->input_moves_up[i]) {
+			buffer_input->input.move_up = 1.0f;
+		} else {
+			buffer_input->input.move_up = 0.0f;
+		}
+		if(client_input->input_moves_down[i]) {
+			buffer_input->input.move_down = 1.0f;
+		} else {
+			buffer_input->input.move_down = 0.0f;
+		}
 	}
 }
 
