@@ -148,8 +148,15 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	}
 
 	i32 frame_delta = input_packet.latest_frame - input_packet.oldest_frame;
-	for(i32 i = 0; i < frame_delta; i++) {
-		World* input_world = &client_state_from_frame(client, client->frame - frame_delta + i)->world;
+	for(i32 i = 0; i <= frame_delta; i++) {
+		i32 input_frame = client->frame - frame_delta + i;
+		if(input_frame == client->frame) {
+			printf("SENDING CURRENT CLIENT FRAME (%u)\n", client->frame);
+		}
+		
+		World* input_world = &client_state_from_frame(client, input_frame)->world;
+		assert(client_state_from_frame(client, input_frame)->frame == input_frame);
+		
 		input_packet.input_moves_up[i] = (input_world->player_inputs[client->id].move_up > 0.0f);
 		input_packet.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
 	}
