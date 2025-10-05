@@ -7,9 +7,6 @@
 // The platform layer is strictly for abstracting the platform details.
  
 // TIME TO IMPLEMENT:
-// - Disconnection and time out on both client and server side.
-//   - Add another phase for clients to be in where are waiting for both players
-//     to exist.
 // - Local multiplayer
 // - Local bot
 // - AND cleanup/comb for issues line by line, including packet serialization
@@ -140,6 +137,8 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 		i32 input_frame = client_input->latest_frame - frame_delta + i;
 		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
 
+		assert(input_frame <= client_input->latest_frame);
+
 		if(buffer_input->frame != input_frame) {
 			buffer_input->frame = input_frame;
 
@@ -216,12 +215,12 @@ void server_update_active(Server* server, float delta_time)
 		// Client speed up if the server is too far ahead, client slow down if the
 		// server is too far behind.
 		// TODO: We want the thresholds to be based on current average ping to this client.
-		} else if(latest_frame_received - server->frame < 3) {
+		} else if(latest_frame_received - server->frame < 6) {
 			ServerSpeedUpPacket speed_packet;
 			speed_packet.header.type = SERVER_PACKET_SPEED_UP;
 			//speed_packet.frame = server->frame;
 			platform_send_packet(server->socket, i, &speed_packet, sizeof(speed_packet));
-		} else if(latest_frame_received - server->frame > 5) {
+		} else if(latest_frame_received - server->frame > 10) {
 			ServerSlowDownPacket slow_packet;
 			slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
 			//slow_packet.frame = server->frame;
