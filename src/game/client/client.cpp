@@ -285,7 +285,7 @@ void client_process_packets(Client* client, Platform* platform)
 			case SERVER_PACKET_DISCONNECT:
 				client_handle_disconnect(client); break;
 			case SERVER_PACKET_SPEED_UP:
-				client_handle_slow_down(client); break;
+				client_handle_speed_up(client); break;
 			case SERVER_PACKET_SLOW_DOWN:
 				client_handle_slow_down(client); break;
 			default: break;
