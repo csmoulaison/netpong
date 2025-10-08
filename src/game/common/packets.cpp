@@ -33,7 +33,7 @@ struct ClientInputPacket {
 	ClientPacketHeader header;
 	i32 latest_frame;
 	i32 oldest_frame;
-	bool input_moves_up[INPUT_WINDOW_FRAMES];
+	bool input_moves_up[INPUT_WINDOW_FRAMES8
 	bool input_moves_down[INPUT_WINDOW_FRAMES];
 };
 

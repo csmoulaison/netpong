@@ -142,7 +142,7 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	input_packet.header.client_id = client->id;
 	input_packet.latest_frame = client->frame;
 
-	input_packet.oldest_frame = client->frame - INPUT_WINDOW_FRAMES;
+	input_packet.oldest_frame = client->frame - INPUT_WINDOW_FRAMES + 1;
 	if(input_packet.oldest_frame < 0) { 
 		input_packet.oldest_frame = 0;
 	}
@@ -267,7 +267,7 @@ void client_process_packets(Client* client, Platform* platform)
 {
 	// TODO: this is dirty shit dude. arena_create should be able to allocate from
 	// an existing arena
-	Arena packet_arena = arena_create(4096);
+	Arena packet_arena = arena_create(16000);
 	PlatformPayload payload = platform_receive_packets(client->socket,&packet_arena);
 	PlatformPacket* packet = payload.head;
 

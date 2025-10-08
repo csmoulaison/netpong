@@ -136,23 +136,22 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 	for(i32 i = 0; i <= frame_delta; i++) {
 		i32 input_frame = client_input->latest_frame - frame_delta + i;
 		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
+		if(buffer_input->frame == input_frame) {
+			continue;
+		}
 
-		assert(input_frame <= client_input->latest_frame);
+		buffer_input->frame = input_frame;
 
-		if(buffer_input->frame != input_frame) {
-			buffer_input->frame = input_frame;
-
-			if(client_input->input_moves_up[i]) {
-				buffer_input->input.move_up = 1.0f;
-			} else {
-				buffer_input->input.move_up = 0.0f;
-			}
-			if(client_input->input_moves_down[i]) {
-				buffer_input->input.move_down = 1.0f;
-			} else {
-				buffer_input->input.move_down = 0.0f;
-			}
-		} 
+		if(client_input->input_moves_up[i]) {
+			buffer_input->input.move_up = 1.0f;
+		} else {
+			buffer_input->input.move_up = 0.0f;
+		}
+		if(client_input->input_moves_down[i]) {
+			buffer_input->input.move_down = 1.0f;
+		} else {
+			buffer_input->input.move_down = 0.0f;
+		}
 	}
 }
 
@@ -160,7 +159,7 @@ void server_process_packets(Server* server)
 {
 	// TODO: this is dirty shit dude. arena_create should be able to allocate from
 	// an existing arena
-	Arena packet_arena = arena_create(4096);
+	Arena packet_arena = arena_create(16000);
 	PlatformPayload payload = platform_receive_packets(server->socket, &packet_arena);
 	PlatformPacket* packet = payload.head;
 
@@ -215,12 +214,12 @@ void server_update_active(Server* server, float delta_time)
 		// Client speed up if the server is too far ahead, client slow down if the
 		// server is too far behind.
 		// TODO: We want the thresholds to be based on current average ping to this client.
-		} else if(latest_frame_received - server->frame < 6) {
+		} else if(latest_frame_received - server->frame < 3) {
 			ServerSpeedUpPacket speed_packet;
 			speed_packet.header.type = SERVER_PACKET_SPEED_UP;
 			//speed_packet.frame = server->frame;
 			platform_send_packet(server->socket, i, &speed_packet, sizeof(speed_packet));
-		} else if(latest_frame_received - server->frame > 10) {
+		} else if(latest_frame_received - server->frame > 6) {
 			ServerSlowDownPacket slow_packet;
 			slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
 			//slow_packet.frame = server->frame;
