@@ -135,8 +135,6 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	}
 	client_simulate_frame(world, client);
 
-	// NOW: Send sliding window of inputs so that the server can check for holes
-	// in what it has received.
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
 	input_packet.header.client_id = client->id;
@@ -333,10 +331,10 @@ void client_update_requesting_connection(Client* client, Platform* platform, Ren
 
 void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
 {
-	ClientJoinAcknowledgePacket acknowledge_packet;
-	acknowledge_packet.header.type = CLIENT_PACKET_JOIN_ACKNOWLEDGE;
-	acknowledge_packet.header.client_id = client->id;
-	platform_send_packet(client->socket, 0, &acknowledge_packet, sizeof(acknowledge_packet));
+	ClientReadyToStartPacket ready_packet;
+	ready_packet.header.type = CLIENT_PACKET_READY_TO_START;
+	ready_packet.header.client_id = client->id;
+	platform_send_packet(client->socket, 0, &ready_packet, sizeof(ready_packet));
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {

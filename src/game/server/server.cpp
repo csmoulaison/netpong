@@ -51,6 +51,7 @@ struct ServerConnection {
 	ServerConnectionState state;
 	// absolute frame % INPUT_BUFFER_SIZE = frame index
 	ClientInput inputs[INPUT_BUFFER_SIZE];
+	float ready_timeout_countdown;
 };
 
 struct Server {
@@ -97,8 +98,10 @@ void server_handle_connection_request(Server* server, i8 connection_id)
 		printf("Server: A client requested a connection (%u), but the game is full.\n", connection_id);
 	}
 
-	if(server->connections[connection_id].state == SERVER_CONNECTION_OPEN) {
-		server->connections[connection_id].state = SERVER_CONNECTION_PENDING;
+	ServerConnection* client = &server->connections[connection_id];
+	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
+	if(client->state == SERVER_CONNECTION_OPEN) {
+		client->state = SERVER_CONNECTION_PENDING;
 		printf("Accepting client join, adding client: %d\n", connection_id);
 	}
 
@@ -114,14 +117,17 @@ void server_handle_connection_request(Server* server, i8 connection_id)
 // connection requests.
 // Once both connections are in the ACTIVE state, the server update function
 // will use the active game codepath.
-void server_handle_join_acknowledge(Server* server, i8 connection_id)
+void server_handle_client_ready(Server* server, i8 connection_id)
 {
 	assert(connection_id <= 1);
 
-	if(server->connections[connection_id].state == SERVER_CONNECTION_PENDING) {
-		server->connections[connection_id].state = SERVER_CONNECTION_ACTIVE;
+	ServerConnection* client = &server->connections[connection_id];
+	if(client->state == SERVER_CONNECTION_PENDING) {
+		client->state = SERVER_CONNECTION_ACTIVE;
 		printf("Received client acknowledgement, setting client connected: %d\n", connection_id);
 	}
+
+	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
 }
 
 // Stores newly recieved input in the relevant client's input buffer. These
@@ -170,8 +176,8 @@ void server_process_packets(Server* server)
 		switch(header->type) {
 			case CLIENT_PACKET_REQUEST_CONNECTION:
 				server_handle_connection_request(server, connection_id); break;
-			case CLIENT_PACKET_JOIN_ACKNOWLEDGE:
-				server_handle_join_acknowledge(server, connection_id); break;
+			case CLIENT_PACKET_READY_TO_START:
+				server_handle_client_ready(server, connection_id); break;
 			case CLIENT_PACKET_INPUT:
 				server_handle_client_input(server, connection_id, (ClientInputPacket*)packet->data); break;
 			default: break;
@@ -186,9 +192,37 @@ void server_process_packets(Server* server)
 //
 // It's the event queue from Quake, let's be honest, let's not mince words,
 // let's not break balls.
-void server_update_idle(Server* server)
+void server_update_idle(Server* server, float dt)
 {
+	for(i32 i = 0; i < 2; i++) {
+		ServerConnection* client = &server->connections[i];
+		if(client->state == SERVER_CONNECTION_PENDING) {
+			printf("client %i pending\n", i);
+		} else if(client->state == SERVER_CONNECTION_ACTIVE) {
+			printf("client %i active\n", i);
+		} else if(client->state == SERVER_CONNECTION_OPEN) {
+			printf("client %i open\n", i);
+		}
+	}
+	
 	server->frame = 0;
+	for(i32 i = 0; i < 2; i++) {
+		ServerConnection* client = &server->connections[i];
+		if(client->state != SERVER_CONNECTION_ACTIVE) {
+			continue;
+		}
+		
+		client->ready_timeout_countdown -= dt;
+		if(client->ready_timeout_countdown <= 0.0f) {
+			ServerDisconnectPacket disconnect_packet;
+			disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
+			platform_send_packet(server->socket, i, &disconnect_packet, sizeof(disconnect_packet));
+
+			platform_free_connection(server->socket, i);
+			client->state = SERVER_CONNECTION_OPEN;
+			printf("Freed connection %u.\n", i);
+		}
+	}
 }
 
 void server_update_active(Server* server, float delta_time)
@@ -320,7 +354,7 @@ void server_update(Server* server, float delta_time)
 	&& server->connections[1].state == SERVER_CONNECTION_ACTIVE) {
 		server_update_active(server, delta_time);
 	} else {
-		server_update_idle(server);
+		server_update_idle(server, delta_time);
 	}
 }
 
