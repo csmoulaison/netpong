@@ -73,10 +73,10 @@ void world_simulate(World* world, float dt)
 		world->ball_position[i] += world->ball_velocity[i] * dt;
 	}
 
-	float ball_left = world->ball_position[0] - BALL_HALF_WIDTH;
-	float ball_right = world->ball_position[0] + BALL_HALF_WIDTH;
-	float ball_bottom = world->ball_position[1] - BALL_HALF_WIDTH;
-	float ball_top = world->ball_position[1] + BALL_HALF_WIDTH;
+	float ball_left = world->ball_position[0] - BALL_WIDTH;
+	float ball_right = world->ball_position[0] + BALL_WIDTH;
+	float ball_bottom = world->ball_position[1] - BALL_WIDTH;
+	float ball_top = world->ball_position[1] + BALL_WIDTH;
 
 	i8 paddle_index = 0;
 	if(world->ball_velocity[0] > 0.0f) {
