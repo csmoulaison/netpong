@@ -1,21 +1,16 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
-// TODO: < NEXT: it would be good to thin out the platform layer as much as possible,
-// accreting its functionality to this. Specifically, the server should keep
-// track of storing incoming connections.
-// The platform layer is strictly for abstracting the platform details.
- 
 // TIME TO IMPLEMENT:
 // - Local multiplayer
 // - Local bot
 // - AND cleanup/comb for issues line by line, including packet serialization
-// 
+//
 // THEN:
 // - Some sound?
 // - Debug text stuff
 // - Menu with mode selection, etc
-// 
+//
 // FROM THERE (NEW PROJECT):
 // - Cylinders on flat plane -> then terrain
 // - 3d with mouse look and WASD movement
@@ -296,10 +291,6 @@ void server_update_active(Server* server, float delta_time)
 				other_id = 1;
 			}
 
-			// NOW: What if the other connection is already open? Right now, this client
-			// timeout only happens when both connections are active. We will need to
-			// expect some other continuous packet from the clients in order to make this
-			// work properly.
 			ServerEndGamePacket end_packet;
 			end_packet.header.type = SERVER_PACKET_END_GAME;
 			platform_send_packet(server->socket, other_id, &end_packet, sizeof(end_packet));
