@@ -11,23 +11,23 @@
 typedef struct
 {
 	i32 index;
-	float x;
-	float y;
-	float size;
-	float color;
+	f32 x;
+	f32 y;
+	f32 size;
+	f32 color;
 } TextChar;
 
 typedef struct
 {
-	float translation[16];
-	float scale[16];
+	f32 translation[16];
+	f32 scale[16];
 } BoxUbo;
 
 typedef struct
 {
 	// this is a mat2, but must be separated like this for padding requirements.
-	alignas(16) float transform_a[2];
-	alignas(16) float transform_b[2];
+	alignas(16) f32 transform_a[2];
+	alignas(16) f32 transform_b[2];
 } TextUbo;
 
 typedef struct {
@@ -128,7 +128,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	gl->text_program = gl_create_program("shaders/text.vert", "shaders/text.frag");
 
 	// Vertex arrays/buffers
-	float quad_vertices[] = {
+	f32 quad_vertices[] = {
 		 1.0f,  1.0f,
 		 1.0f, -1.0f,
 		-1.0f,  1.0f,
@@ -147,7 +147,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
 
 	/* Font atlas texture
 	glGenTextures(1, &gl->font_texture);
@@ -217,7 +217,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 				box.x, box.y, 0.0f, 1.0f
 			},
 			.scale = {
-				((float)platform->window_height / platform->window_width) * box.w, 0.0f, 0.0f, 0.0f,
+				((f32)platform->window_height / platform->window_width) * box.w, 0.0f, 0.0f, 0.0f,
 				0.0f, box.h, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
 				0.0f, 0.0f, 0.0f, 1.0f
@@ -235,8 +235,8 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 	/* Update text ubo
 	TextUbo text_ubo;	
-	float text_scale_x = 27.0f / render_state->window_width;
-	float text_scale_y = 46.0f / render_state->window_height;
+	f32 text_scale_x = 27.0f / render_state->window_width;
+	f32 text_scale_y = 46.0f / render_state->window_height;
 
 	//v2_init(text_ubo.transform_a, text_scale_x,  0);
 	//v2_init(text_ubo.transform_b, 0, -text_scale_y);

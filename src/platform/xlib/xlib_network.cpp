@@ -139,7 +139,7 @@ void xlib_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u
 
 #if NETWORK_SIM_MODE == true
 
-void platform_update_sim_mode(PlatformSocket* socket, float dt) 
+void platform_update_sim_mode(PlatformSocket* socket, f32 dt) 
 {
 	for(i32 i = 0; i < socket->sim_packets_len; i++) {
 		SimPacket* sim_packet = &socket->sim_packets[i];
@@ -160,7 +160,7 @@ void platform_update_sim_mode(PlatformSocket* socket, float dt)
 
 void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size) {
 #if NETWORK_SIM_MODE == true
-	if(random_float() < NETWORK_SIM_PACKET_LOSS_CHANCE) {
+	if(random_f32() < NETWORK_SIM_PACKET_LOSS_CHANCE) {
 		//printf("Artificial packet loss.\n");
 		return;
 	}
@@ -169,7 +169,7 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 	SimPacket* sim_packet = &socket->sim_packets[socket->sim_packets_len];
 	socket->sim_packets_len++;
 
-	sim_packet->countdown = random_float() * NETWORK_SIM_LATENCY_AVERAGE_SECONDS + random_float() * NETWORK_SIM_LATENCY_VARIANCE_SECONDS;
+	sim_packet->countdown = random_f32() * NETWORK_SIM_LATENCY_AVERAGE_SECONDS + random_f32() * NETWORK_SIM_LATENCY_VARIANCE_SECONDS;
 	sim_packet->connection_id = connection_id;
 	sim_packet->size = size;
 	sim_packet->packet = malloc(size);

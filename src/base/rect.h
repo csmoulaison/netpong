@@ -2,7 +2,7 @@
 #define rect_h_INCLUDED
 
 struct Rect {
-	float x, y, w, h;
+	f32 x, y, w, h;
 };
 
 #endif // rect_h_INCLUDED

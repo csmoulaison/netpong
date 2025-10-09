@@ -24,7 +24,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
-RenderState renderer_interpolate_states(RenderState* previous, RenderState* current, float t)
+RenderState renderer_interpolate_states(RenderState* previous, RenderState* current, f32 t)
 {
 #if RENDERER_NO_INTERPOLATION
 	return *current;

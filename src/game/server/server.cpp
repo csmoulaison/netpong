@@ -46,7 +46,7 @@ struct ServerConnection {
 	ServerConnectionState state;
 	// absolute frame % INPUT_BUFFER_SIZE = frame index
 	ClientInput inputs[INPUT_BUFFER_SIZE];
-	float ready_timeout_countdown;
+	f32 ready_timeout_countdown;
 };
 
 struct Server {
@@ -187,7 +187,7 @@ void server_process_packets(Server* server)
 //
 // It's the event queue from Quake, let's be honest, let's not mince words,
 // let's not break balls.
-void server_update_idle(Server* server, float dt)
+void server_update_idle(Server* server, f32 dt)
 {
 	for(i32 i = 0; i < 2; i++) {
 		ServerConnection* client = &server->connections[i];
@@ -220,7 +220,7 @@ void server_update_idle(Server* server, float dt)
 	}
 }
 
-void server_update_active(Server* server, float delta_time)
+void server_update_active(Server* server, f32 delta_time)
 {
 	for(u8 i = 0; i < 2; i++) {
 		ServerConnection* client = &server->connections[i];
@@ -333,7 +333,7 @@ void server_update_active(Server* server, float delta_time)
 	server->frame++;
 }
 
-void server_update(Server* server, float delta_time)
+void server_update(Server* server, f32 delta_time)
 {
 	server_process_packets(server);
 

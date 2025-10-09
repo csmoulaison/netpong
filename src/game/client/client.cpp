@@ -32,8 +32,8 @@ struct Client {
 	ButtonHandle button_move_down;
 	ButtonHandle button_quit;
 
-	float visual_ball_position[2];
-	float visual_paddle_positions[2];
+	f32 visual_ball_position[2];
+	f32 visual_paddle_positions[2];
 };
 
 // Utility functions
@@ -296,7 +296,7 @@ void client_process_packets(Client* client, Platform* platform)
 // Client update functions
 void client_render_box(RenderState* render_state, Rect box, Platform* platform)
 {
-	float x_scale = (float)platform->window_height / platform->window_width;
+	f32 x_scale = (f32)platform->window_height / platform->window_width;
 
 	Rect* rect = &render_state->boxes[render_state->boxes_len];
 	render_state->boxes_len += 1;
@@ -315,7 +315,7 @@ void client_update_requesting_connection(Client* client, Platform* platform, Ren
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
-		float xoff = -1000.0f;
+		f32 xoff = -1000.0f;
 		if((client->frame / 60) % 3 == 0) {
 			xoff = 0.0f;
 		}
@@ -338,7 +338,7 @@ void client_update_waiting_to_start(Client* client, Platform* platform, RenderSt
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
-		float xoff = 0.0f;
+		f32 xoff = 0.0f;
 		xoff += ((client->frame / 30) % 3) * 0.025;
 
 		Rect box;
@@ -350,7 +350,7 @@ void client_update_waiting_to_start(Client* client, Platform* platform, RenderSt
 	}
 }
 
-void client_visual_lerp(float* visual, float real, float dt)
+void client_visual_lerp(f32* visual, f32 real, f32 dt)
 {
 	*visual = lerp(*visual, real, VISUAL_SMOOTHING_SPEED * dt);
 	if(abs(*visual - real) < VISUAL_SMOOTHING_EPSILON) {

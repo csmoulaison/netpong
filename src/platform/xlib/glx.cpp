@@ -72,7 +72,7 @@ GlxInitInfo glx_init_pre_window(Xlib* xlib)
 
 void glx_init_post_window(Xlib* xlib, GLXFBConfig framebuffer_config)
 {
-	// Check for required GL extensions.
+	// Check for required GL extensions
 	glXCreateContextAttribsARBProc glXCreateContextAttribsARB;
 	char* gl_extensions = (char*)glXQueryExtensionsString(xlib->display, DefaultScreen(xlib->display));
 	glXCreateContextAttribsARB = (glXCreateContextAttribsARBProc)glXGetProcAddressARB((const GLubyte*)"glXCreateContextAttribsARB");
@@ -82,14 +82,12 @@ void glx_init_post_window(Xlib* xlib, GLXFBConfig framebuffer_config)
 	char* where;
 	char* terminator;
 
-	// Extension names should not have spaces.
+	// Extension names shouldn't have spaces
 	where = strchr((char*)extension, ' ');
 	if (where || *extension == '\0') {
 		panic();
 	}
 
-	// It takes a bit of care to be fool-proof about parsing the OpenGL
-	// extensions string. Don't be fooled by sub-strings, etc.
 	bool found_extension = true;
 	for (start = gl_extensions;;) {
 		where = strstr(start, extension);

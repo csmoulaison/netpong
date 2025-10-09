@@ -4,7 +4,7 @@
 #include <time.h>
 
 void random_init();
-float random_float();
+f32 random_f32();
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
@@ -12,8 +12,8 @@ void random_init() {
 	srand(time(nullptr));
 }
 
-float random_float() {
-	return (float)rand() / (float)RAND_MAX;
+f32 random_f32() {
+	return (f32)rand() / (f32)RAND_MAX;
 }
 
 #endif

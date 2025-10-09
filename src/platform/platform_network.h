@@ -21,7 +21,7 @@
 #define NETWORK_SIM_LATENCY_VARIANCE_SECONDS 0.01f
 
 struct SimPacket {
-	float countdown;
+	f32 countdown;
 	i32 connection_id;
 	void* packet;
 	u32 size;
@@ -79,7 +79,7 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena);
 
 #if NETWORK_SIM_MODE
 
-void platform_update_sim_mode(PlatformSocket* socket, float dt);
+void platform_update_sim_mode(PlatformSocket* socket, f32 dt);
 
 #endif
 

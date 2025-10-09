@@ -1,11 +1,11 @@
 #ifndef interpolate_h_INCLUDED
 #define interpolate_h_INCLUDED
 
-float lerp(float a, float b, float t);
+f32 lerp(f32 a, f32 b, f32 t);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
-float lerp(float a, float b, float t)
+f32 lerp(f32 a, f32 b, f32 t)
 {
 	return (1.0f - t) * a + t * b;
 }
