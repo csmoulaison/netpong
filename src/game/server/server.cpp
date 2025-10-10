@@ -1,26 +1,6 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
-// TIME TO IMPLEMENT:
-// - Local multiplayer
-// - Local bot
-// - AND cleanup/comb for issues line by line, including packet serialization
-//
-// THEN:
-// - Some sound?
-// - Debug text stuff
-// - Menu with mode selection, etc
-//
-// FROM THERE (NEW PROJECT):
-// - Cylinders on flat plane -> then terrain
-// - 3d with mouse look and WASD movement
-// - Radial collision handling, try bounce/direct block, idk
-//
-// AND THEN:
-// - Auto machine gun, not subject to client-side prediction. Must be resolved
-//   client side on a delay, unlike other clients.
-// - Physics scheme for mech stuff.
-
 // TODO: Things we want to be able to test/log/handle:
 // 1. Differing packet loss rates.
 // 2. Differing packet latency/latency variance.
