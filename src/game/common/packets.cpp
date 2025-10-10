@@ -18,7 +18,7 @@ enum ClientPacketType {
 
 struct ClientPacketHeader {
 	ClientPacketType type;
-	u8 client_id;
+	i32 client_id;
 };
 
 struct ClientRequestConnectionPacket {

@@ -189,17 +189,6 @@ void server_process_packets(Server* server)
 // let's not break balls.
 void server_update_idle(Server* server, f32 dt)
 {
-	for(i32 i = 0; i < 2; i++) {
-		ServerConnection* client = &server->connections[i];
-		if(client->state == SERVER_CONNECTION_PENDING) {
-			printf("client %i pending\n", i);
-		} else if(client->state == SERVER_CONNECTION_ACTIVE) {
-			printf("client %i active\n", i);
-		} else if(client->state == SERVER_CONNECTION_OPEN) {
-			printf("client %i open\n", i);
-		}
-	}
-	
 	server->frame = 0;
 	for(i32 i = 0; i < 2; i++) {
 		ServerConnection* client = &server->connections[i];

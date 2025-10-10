@@ -65,7 +65,7 @@ PlatformSocket* platform_init_server_socket(Arena* arena)
 	return platform_socket;
 }
 
-PlatformSocket* platform_init_client_socket(Arena* arena)
+PlatformSocket* platform_init_client_socket(Arena* arena, char* ip_string)
 {
 	PlatformSocket* platform_socket = (PlatformSocket*)arena_alloc(arena, sizeof(PlatformSocket));
 	platform_socket->type = SOCKET_TYPE_CLIENT;
@@ -84,8 +84,14 @@ PlatformSocket* platform_init_client_socket(Arena* arena)
 	memset(&server->address, 0, sizeof(struct sockaddr_in));
 
 	server->address.sin_family = AF_INET;
-	server->address.sin_addr.s_addr = INADDR_ANY;
 	server->address.sin_port = htons(8080);
+	if(ip_string == nullptr) {
+		server->address.sin_addr.s_addr = INADDR_ANY;
+	} else {
+		if(inet_pton(AF_INET, ip_string, &server->address.sin_addr) <= 0) {
+			panic();
+		}
+	}
 
 	return platform_socket;
 }

@@ -66,11 +66,11 @@ void client_reset_game(Client* client)
 	}
 }
 
-Client* client_init(Platform* platform, Arena* arena)
+Client* client_init(Platform* platform, Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
-	client->socket = platform_init_client_socket(arena);
+	client->socket = platform_init_client_socket(arena, ip_string);
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
 	client->id = -1;
 	client->close_requested = false;

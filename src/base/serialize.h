@@ -2,7 +2,6 @@
 #define serialize_h_INCLUDED
 
 // TODO: Bitpacking. Right now we are just using 32 bit data positions.
-
 enum BitstreamMode {
 	BITSTREAM_WRITE,
 	BITSTREAM_READ

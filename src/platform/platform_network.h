@@ -7,7 +7,7 @@
 #define MAX_PAYLOAD_PACKETS 64
 #define MAX_PACKET_BYTES 2048
 
-#define NETWORK_SIM_MODE true
+#define NETWORK_SIM_MODE false
 
 #if NETWORK_SIM_MODE
 
@@ -61,7 +61,7 @@ struct PlatformPayload {
 PlatformSocket* platform_init_server_socket(Arena* arena);
 
 // Opens a UDP socket for clients.
-PlatformSocket* platform_init_client_socket(Arena* arena);
+PlatformSocket* platform_init_client_socket(Arena* arena, char* ip_string);
 
 // Returns the connection id.
 i32 platform_add_connection(PlatformSocket* socket, void* address);
