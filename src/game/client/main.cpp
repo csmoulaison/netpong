@@ -25,12 +25,11 @@ i32 main(i32 argc, char** argv)
 	platform_init_post_graphics(platform);
 
 	Client* client;
+	char* ip_string = nullptr;
 	if(argc > 1) {
-		printf("Initializing client with server ip: %s\n", argv[1]);
-		client = client_init(platform, &program_arena, argv[1]);
-	} else {
-		client = client_init(platform, &program_arena, nullptr);
+		ip_string = argv[1];
 	}
+	client = client_init(platform, &program_arena, nullptr);
 
 	RenderState* previous_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
