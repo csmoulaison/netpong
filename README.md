@@ -1,5 +1,6 @@
 # Netpong: Networked Multiplayer Pong with Client Side Prediction and Server Reconciliation
 ![hippo](preview.gif)
+
 This is a simple version of Pong which targets X11 on Linux and uses OpenGL for rendering. It was written as a learning project, and I achieved the following goals:
 - Implemented networked multiplayer code directly on top of Unix UDP sockets. Uses client side prediction, server side reconciliation, and visual interpolation
 - Included simple macros for simulating different network conditions, including packet loss and latency
