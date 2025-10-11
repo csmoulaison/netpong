@@ -136,28 +136,25 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 	}
 }
 
+// NOW: Process packets with new scheme.
 void server_process_packets(Server* server)
 {
-	// TODO: this is dirty shit dude. arena_create should be able to allocate from
-	// an existing arena
+	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPayload payload = platform_receive_packets(server->socket, &packet_arena);
-	PlatformPacket* packet = payload.head;
+	PlatformPacketNode* node = platform_receive_packets(server->socket, &packet_arena);
 
-	while(packet != nullptr) {
-		i8 connection_id = packet->connection_id;
-		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
-
+	while(node != nullptr) {
+		PlatformPackit* packet = (PlatformPackit*)packet_head->packet;
 		switch(header->type) {
 			case CLIENT_PACKET_REQUEST_CONNECTION:
-				server_handle_connection_request(server, connection_id); break;
+				server_handle_connection_request(server, packet->connection_id); break;
 			case CLIENT_PACKET_READY_TO_START:
-				server_handle_client_ready(server, connection_id); break;
+				server_handle_client_ready(server, packet->connection_id); break;
 			case CLIENT_PACKET_INPUT:
-				server_handle_client_input(server, connection_id, (ClientInputPacket*)packet->data); break;
+				server_handle_client_input(server, packet->connection_id, (ClientInputPacket*)packet->data); break;
 			default: break;
 		}
-		packet = packet->next;
+		node = node->next;
 	}
 	arena_destroy(&packet_arena);
 }

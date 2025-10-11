@@ -9,6 +9,18 @@
 // The data will be serialized using read/write serialization methods and stored
 // in the void* data member.
 
+#define PACKET_CLIENT_REQUEST_CONNECTION 0
+#define PACKET_CLIENT_READY_TO_START 1
+#define PACKET_CLIENT_INPUT 2
+
+#define PACKET_SERVER_ACCEPT_CONNECTION 3
+#define PACKET_SERVER_START_GAME 4
+#define PACKET_SERVER_END_GAME 5
+#define PACKET_SERVER_DISCONNECT 6
+#define PACKET_SERVER_WORLD_UPDATE 7
+#define PACKET_SERVER_SPEED_UP 8
+#define PACKET_SERVER_SLOW_DOWN 9
+
 // Client packets
 enum ClientPacketType {
 	CLIENT_PACKET_REQUEST_CONNECTION,

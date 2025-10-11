@@ -258,17 +258,16 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
+// NOW: Process packets with new scheme.
 void client_process_packets(Client* client, Platform* platform)
 {
-	// TODO: this is dirty shit dude. arena_create should be able to allocate from
-	// an existing arena
+	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPayload payload = platform_receive_packets(client->socket,&packet_arena);
-	PlatformPacket* packet = payload.head;
+	PlatformPacketNode* node = platform_receive_packets(client->socket,&packet_arena);
 
-	while(packet != nullptr) {
-		ClientPacketHeader* header = (ClientPacketHeader*)packet->data;
-		switch(header->type) {
+	while(node != nullptr) {
+		PlatformPackit* packet = (PlatformPackit*)packet_head->packet;
+		switch(packet->type) {
 			case SERVER_PACKET_WORLD_UPDATE:
 				client_handle_world_update(client, (ServerWorldUpdatePacket*)packet->data, platform); break;
 			case SERVER_PACKET_ACCEPT_CONNECTION:
@@ -285,7 +284,7 @@ void client_process_packets(Client* client, Platform* platform)
 				client_handle_slow_down(client); break;
 			default: break;
 		}
-		packet = packet->next;
+		node = node->next;
 	}
 	arena_destroy(&packet_arena);
 }

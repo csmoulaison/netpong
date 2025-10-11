@@ -44,17 +44,24 @@ struct PlatformSocket {
 #endif
 };
 
-struct PlatformPacket {
-	PlatformPacket* next;
-
-	char* data;
-	u32 data_size;
-
+// NOW: < THIS: This way of doing things makes it a little bit awkward in the
+// sense that all of this needs to be transmitted over the network, at least the
+// type does. I suppose we will want to fold all of this down into a void* create
+// a serialize function for the header that can be composed with the main packet
+// serialization stuff.
+// 
+// NOW: Rename to PlatformPacket once we are transitioned.
+struct PlatformPackit {
 	i32 connection_id;
+	u16 type;
+	void* data;
 };
 
-struct PlatformPayload {
-	PlatformPacket* head;
+struct PlatformPacketNode {
+	PlatformPacketNode* next;
+
+	PlatformPackit packet;
+	u32 data_size;
 };
 
 // Opens a UDP socket for the host server.
@@ -75,7 +82,7 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 
 // Pull all packets received since the previous call of this function. The
 // packets are allocated to the given memory arena, so remember to free it.
-PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena);
+PlatformPacketNode* platform_receive_packets(PlatformSocket* socket, Arena* arena);
 
 #if NETWORK_SIM_MODE
 
