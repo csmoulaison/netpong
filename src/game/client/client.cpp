@@ -14,6 +14,9 @@ struct ClientWorldState {
 	i32 frame;
 };
 
+// Processing network packets into events isn't strictly necessary on the client
+// side, as the client is never receiving messages from a local source, but it
+// will likely be useful for testing and the like.
 enum ClientEventType {
 	CLIENT_EVENT_START_GAME,
 	CLIENT_EVENT_END_GAME,
@@ -278,18 +281,20 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
-void client_pull_messages(Client* client)
+void client_receive_messages(Client* client)
 {
+	// The client only ever receives messages from a remote server.
+
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
 	PlatformPacket* packet = platform_receive_packets(client->socket,&packet_arena);
-
 	while(packet != nullptr) {
+		void* data = packet->data;
+		u8 type = *(u8*)packet->data;
+
 		// Variables used in the switch statement.
 		ClientWorldState update_state;
 
-		void* data = packet->data;
-		u8 type = *(u8*)packet->data;
 		switch(type) {
 			case SERVER_MESSAGE_WORLD_UPDATE:
 				update_state.world = ((ServerWorldUpdateMessage*)data)->world;
@@ -466,7 +471,7 @@ void client_process_events(Client* client, Platform* platform)
 // the game layer. It will pull from either the client or world state.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
-	client_pull_messages(client);
+	client_receive_messages(client);
 	client_process_events(client, platform);
 
 #if NETWORK_SIM_MODE

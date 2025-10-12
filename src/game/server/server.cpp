@@ -1,6 +1,8 @@
 #define INPUT_BUFFER_SIZE 64
 #define INPUT_SLOWDOWN_THRESHOLD 3
 
+#define MAX_SERVER_EVENTS 256
+
 // TODO: Things we want to be able to test/log/handle:
 // 1. Differing packet loss rates.
 // 2. Differing packet latency/latency variance.
@@ -14,6 +16,20 @@
 struct ClientInput {
 	i32 frame;
 	PlayerInput input;
+};
+
+enum ServerEventType {
+	SERVER_EVENT_CONNECTION_REQUEST,
+	SERVER_EVENT_CLIENT_READY_TO_START,
+	SERVER_EVENT_CLIENT_INPUT
+};
+
+struct ServerEvent {
+	ServerEventType type;
+	i32 client_id;
+    union {
+		ClientInputMessage client_input;
+	};
 };
 
 enum ServerConnectionState {
@@ -33,9 +49,17 @@ struct Server {
 	PlatformSocket* socket;
 	ServerConnection connections[2];
 
+	ServerEvent events[MAX_SERVER_EVENTS];
+	u32 events_len;
+
 	i32 frame;
 	World world;
 };
+
+void server_push_event(Server* server, ServerEvent event) {
+	server->events[server->events_len] = event;
+	server->events_len++;
+}
 
 void server_reset_game(Server* server)
 {
@@ -136,7 +160,7 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputMes
 	}
 }
 
-void server_process_packets(Server* server)
+void server_receive_messages(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
@@ -147,11 +171,18 @@ void server_process_packets(Server* server)
 		void* data = packet->data;
 		switch(type) {
 			case CLIENT_MESSAGE_REQUEST_CONNECTION:
-				server_handle_connection_request(server, packet->connection_id); break;
+				server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CONNECTION_REQUEST, .client_id = packet->connection_id });
+				break;
 			case CLIENT_MESSAGE_READY_TO_START:
-				server_handle_client_ready(server, packet->connection_id); break;
+				server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CLIENT_READY_TO_START, .client_id = packet->connection_id });
+				break;
 			case CLIENT_MESSAGE_INPUT:
-				server_handle_client_input(server, packet->connection_id, (ClientInputMessage*)packet->data); break;
+				server_push_event(server, (ServerEvent){ 
+					.type = SERVER_EVENT_CLIENT_INPUT, 
+					.client_id = packet->connection_id,
+					.client_input = *(ClientInputMessage*)packet->data
+				});
+				break;
 			default: break;
 		}
 		packet = packet->next;
@@ -299,9 +330,30 @@ void server_update_active(Server* server, f32 delta_time)
 	server->frame++;
 }
 
+void server_process_events(Server* server)
+{
+	for(u32 i = 0; i < server->events_len; i++) {
+		ServerEvent* event = &server->events[i];
+		switch(event->type) {
+			case SERVER_EVENT_CONNECTION_REQUEST:
+				server_handle_connection_request(server, event->client_id);
+				break;
+			case SERVER_EVENT_CLIENT_READY_TO_START:
+				server_handle_client_ready(server, event->client_id);
+				break;
+			case SERVER_EVENT_CLIENT_INPUT:
+				server_handle_client_input(server, event->client_id, &event->client_input); 
+				break;
+			default: break;
+		}
+	}
+	server->events_len = 0;
+}
+
 void server_update(Server* server, f32 delta_time)
 {
-	server_process_packets(server);
+	server_receive_messages(server);
+	server_process_events(server);
 
 #if NETWORK_SIM_MODE
 	platform_update_sim_mode(server->socket, delta_time);
