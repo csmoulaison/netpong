@@ -10,29 +10,28 @@ enum ClientConnectionState {
 };
 
 struct ClientWorldState {
-	i32 frame;
 	World world;
+	i32 frame;
 };
 
 enum ClientEventType {
-	CLIENT_EVENT_WORLD_UPDATE,
 	CLIENT_EVENT_START_GAME,
 	CLIENT_EVENT_END_GAME,
 	CLIENT_EVENT_CONNECTION_ACCEPTED,
 	CLIENT_EVENT_DISCONNECT,
 	CLIENT_EVENT_INPUT_MOVE_UP,
 	CLIENT_EVENT_INPUT_MOVE_DOWN,
+	CLIENT_EVENT_WORLD_UPDATE,
 	CLIENT_EVENT_SPEED_UP,
 	CLIENT_EVENT_SLOW_DOWN
 };
 
 struct ClientEvent {
 	ClientEventType type;
-	/* Type specific data
     union {
-
+		i32 assigned_id;
+		ClientWorldState world_update;
 	};
-	*/
 };
 
 struct Client {
@@ -56,6 +55,11 @@ struct Client {
 	f32 visual_ball_position[2];
 	f32 visual_paddle_positions[2];
 };
+
+void client_push_event(Client* client, ClientEvent event) {
+	client->events[client->events_len] = event;
+	client->events_len++;
+}
 
 // Utility functions
 ClientWorldState* client_state_from_frame(Client* client, i32 frame)
@@ -178,9 +182,9 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 }
 
 // Packet handling functions
-void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_update, Platform* platform)
+void client_handle_world_update(Client* client, ClientWorldState* server_state, Platform* platform)
 {
-	i32 update_frame = server_update->frame;
+	i32 update_frame = server_state->frame;
 	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
 
 	if(update_state->frame != update_frame) {
@@ -192,20 +196,20 @@ void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_
 		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
 	}
 
-	World* client_state = &update_state->world;
-	World* server_state = &server_update->world;
+	World* client_world = &update_state->world;
+	World* server_world = &server_state->world;
 
 	// If the states are equal, client side prediction was successful and we do not
 	// need to resimulate.
-	if(server_state->paddle_positions[0] == client_state->paddle_positions[0]
-	&& server_state->paddle_positions[1] == client_state->paddle_positions[1]
-	&& server_state->paddle_velocities[0] == client_state->paddle_velocities[0]
-	&& server_state->paddle_velocities[1] == client_state->paddle_velocities[1]) {
+	if(server_world->paddle_positions[0] == client_world->paddle_positions[0]
+	&& server_world->paddle_positions[1] == client_world->paddle_positions[1]
+	&& server_world->paddle_velocities[0] == client_world->paddle_velocities[0]
+	&& server_world->paddle_velocities[1] == client_world->paddle_velocities[1]) {
 		return;
 	}
 
 	assert(client->frame - update_frame >= 0);
-	memcpy(client_state, server_state, sizeof(World));
+	memcpy(client_world, server_world, sizeof(World));
 
 	for(i32 i = update_frame + 1; i <= client->frame; i++) {
 		World* previous_world = &client_state_from_frame(client, i - 1)->world;
@@ -225,10 +229,10 @@ void client_handle_world_update(Client* client, ServerWorldUpdatePacket* server_
 // 
 // In this state, we will continually send back a counter acknowledgement so the
 // server knows we are ready. This happens in the client update loop.
-void client_handle_accept_connection(Client* client, ServerAcceptConnectionPacket* accept_packet)
+void client_handle_accept_connection(Client* client, i32 client_id)
 {
 	if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
-		client->id = accept_packet->client_id;
+		client->id = client_id;
 		client->connection_state = CLIENT_STATE_WAITING_TO_START;
 
 		printf("Recieved connection acceptance from server.\n");
@@ -274,30 +278,48 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
-void client_process_packets(Client* client, Platform* platform)
+void client_process_packets(Client* client)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
 	PlatformPacket* packet = platform_receive_packets(client->socket,&packet_arena);
 
 	while(packet != nullptr) {
+		// Variables used in the switch statement.
+		ClientWorldState update_state;
+
 		void* data = packet->data;
 		u8 type = *(u8*)packet->data;
 		switch(type) {
 			case SERVER_PACKET_WORLD_UPDATE:
-				client_handle_world_update(client, (ServerWorldUpdatePacket*)packet->data, platform); break;
+				update_state.world = ((ServerWorldUpdatePacket*)data)->world;
+				update_state.frame = ((ServerWorldUpdatePacket*)data)->frame;
+				client_push_event(client, (ClientEvent){ 
+					.type = CLIENT_EVENT_WORLD_UPDATE, 
+					.world_update = update_state 
+				}); 
+				break;
 			case SERVER_PACKET_ACCEPT_CONNECTION:
-				client_handle_accept_connection(client, (ServerAcceptConnectionPacket*)packet->data); break;
+				client_push_event(client, (ClientEvent){ 
+					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
+					.assigned_id = ((ServerAcceptConnectionPacket*)data)->client_id 
+				});
+				break;
 			case SERVER_PACKET_START_GAME:
-				client_handle_start_game(client, platform); break;
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_START_GAME }); 
+				break;
 			case SERVER_PACKET_END_GAME:
-				client_handle_end_game(client); break;
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
+				break;
 			case SERVER_PACKET_DISCONNECT:
-				client_handle_disconnect(client); break;
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_DISCONNECT }); 
+				break;
 			case SERVER_PACKET_SPEED_UP:
-				client_handle_speed_up(client); break;
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SPEED_UP }); 
+				break;
 			case SERVER_PACKET_SLOW_DOWN:
-				client_handle_slow_down(client); break;
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SLOW_DOWN }); 
+				break;
 			default: break;
 		}
 		packet = packet->next;
@@ -399,7 +421,7 @@ void client_update_active(Client* client, Platform* platform, RenderState* rende
 	client_render_box(render_state, ball, platform);
 }
 
-void client_process_events(Client* client)
+void client_process_events(Client* client, Platform* platform)
 {
 	client->move_up = false;
 	client->move_down = false;
@@ -412,6 +434,28 @@ void client_process_events(Client* client)
 			case CLIENT_EVENT_INPUT_MOVE_DOWN:
 				client->move_down = true; 
 				break;
+			case CLIENT_EVENT_WORLD_UPDATE:
+				client_handle_world_update(client, &event->world_update, platform); 
+				break;
+			case CLIENT_EVENT_CONNECTION_ACCEPTED:
+				client_handle_accept_connection(client, event->assigned_id); 
+				printf("connection accepted\n");
+				break;
+			case CLIENT_EVENT_START_GAME:
+				client_handle_start_game(client, platform); 
+				break;
+			case CLIENT_EVENT_END_GAME:
+				client_handle_end_game(client); 
+				break;
+			case CLIENT_EVENT_DISCONNECT:
+				client_handle_disconnect(client); 
+				break;
+			case CLIENT_EVENT_SPEED_UP:
+				client_handle_speed_up(client); 
+				break;
+			case CLIENT_EVENT_SLOW_DOWN:
+				client_handle_slow_down(client); 
+				break;
 			default: break;
 		}
 	}
@@ -422,8 +466,8 @@ void client_process_events(Client* client)
 // the game layer. It will pull from either the client or world state.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
-	client_process_packets(client, platform);
-	client_process_events(client);
+	client_process_packets(client);
+	client_process_events(client, platform);
 
 #if NETWORK_SIM_MODE
 	// TODO: It is certainly wrong to use client->frame_length for this, and we
