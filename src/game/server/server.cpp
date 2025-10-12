@@ -80,10 +80,10 @@ void server_handle_connection_request(Server* server, i8 connection_id)
 		printf("Accepting client join, adding client: %d\n", connection_id);
 	}
 
-	ServerAcceptConnectionPacket accept_packet;
-	accept_packet.header.type = SERVER_PACKET_ACCEPT_CONNECTION;
-	accept_packet.client_id = connection_id;
-	platform_send_packet(server->socket, connection_id, (void*)&accept_packet, sizeof(accept_packet));
+	ServerAcceptConnectionMessage accept_message;
+	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
+	accept_message.client_id = connection_id;
+	platform_send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
 
 }
 
@@ -108,7 +108,7 @@ void server_handle_client_ready(Server* server, i8 connection_id)
 // Stores newly recieved input in the relevant client's input buffer. These
 // buffered inputs are pulled from once every frame in the server active update
 // function.
-void server_handle_client_input(Server* server, i8 connection_id, ClientInputPacket* client_input)
+void server_handle_client_input(Server* server, i8 connection_id, ClientInputMessage* client_input)
 {
 	ServerConnection* client = &server->connections[connection_id];
 
@@ -136,7 +136,6 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputPac
 	}
 }
 
-// NOW: Process packets with new scheme.
 void server_process_packets(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
@@ -147,12 +146,12 @@ void server_process_packets(Server* server)
 		u8 type = *(u8*)packet->data;
 		void* data = packet->data;
 		switch(type) {
-			case CLIENT_PACKET_REQUEST_CONNECTION:
+			case CLIENT_MESSAGE_REQUEST_CONNECTION:
 				server_handle_connection_request(server, packet->connection_id); break;
-			case CLIENT_PACKET_READY_TO_START:
+			case CLIENT_MESSAGE_READY_TO_START:
 				server_handle_client_ready(server, packet->connection_id); break;
-			case CLIENT_PACKET_INPUT:
-				server_handle_client_input(server, packet->connection_id, (ClientInputPacket*)packet->data); break;
+			case CLIENT_MESSAGE_INPUT:
+				server_handle_client_input(server, packet->connection_id, (ClientInputMessage*)packet->data); break;
 			default: break;
 		}
 		packet = packet->next;
@@ -176,9 +175,9 @@ void server_update_idle(Server* server, f32 dt)
 		
 		client->ready_timeout_countdown -= dt;
 		if(client->ready_timeout_countdown <= 0.0f) {
-			ServerDisconnectPacket disconnect_packet;
-			disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
-			platform_send_packet(server->socket, i, &disconnect_packet, sizeof(disconnect_packet));
+			ServerDisconnectMessage disconnect_message;
+			disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
+			platform_send_packet(server->socket, i, &disconnect_message, sizeof(disconnect_message));
 
 			platform_free_connection(server->socket, i);
 			client->state = SERVER_CONNECTION_OPEN;
@@ -202,24 +201,24 @@ void server_update_active(Server* server, f32 delta_time)
 		// If we haven't received any input yet, keep telling the client that the game
 		// has started, and break from the loop here.
 		if(latest_frame_received == -1) {
-			ServerStartGamePacket start_packet;
-			start_packet.header.type = SERVER_PACKET_START_GAME;
-			platform_send_packet(server->socket, i, (void*)&start_packet, sizeof(start_packet));
+			ServerStartGameMessage start_message;
+			start_message.type = SERVER_MESSAGE_START_GAME;
+			platform_send_packet(server->socket, i, (void*)&start_message, sizeof(start_message));
 			printf("Server: Sent start game packet to client%u.\n", i);
 			continue;
 		// Client speed up if the server is too far ahead, client slow down if the
 		// server is too far behind.
 		// TODO: We want the thresholds to be based on current average ping to this client.
 		} else if(latest_frame_received - server->frame < 3) {
-			ServerSpeedUpPacket speed_packet;
-			speed_packet.header.type = SERVER_PACKET_SPEED_UP;
-			//speed_packet.frame = server->frame;
-			platform_send_packet(server->socket, i, &speed_packet, sizeof(speed_packet));
+			ServerSpeedUpMessage speed_message;
+			speed_message.type = SERVER_MESSAGE_SPEED_UP;
+			//speed_message.frame = server->frame;
+			platform_send_packet(server->socket, i, &speed_message, sizeof(speed_message));
 		} else if(latest_frame_received - server->frame > 6) {
-			ServerSlowDownPacket slow_packet;
-			slow_packet.header.type = SERVER_PACKET_SLOW_DOWN;
-			//slow_packet.frame = server->frame;
-			platform_send_packet(server->socket, i, &slow_packet, sizeof(slow_packet));
+			ServerSlowDownMessage slow_message;
+			slow_message.type = SERVER_MESSAGE_SLOW_DOWN;
+			//slow_message.frame = server->frame;
+			platform_send_packet(server->socket, i, &slow_message, sizeof(slow_message));
 		}
 
 		// Optimally, we want to use the client input that coincides with the frame
@@ -245,9 +244,9 @@ void server_update_active(Server* server, f32 delta_time)
 		// INPUT_BUFFER_SIZE frames.
 		// TODO: We want to decouple this from the queue size, really. 
 		if(server->frame - effective_input_frame > INPUT_BUFFER_SIZE) {
-			ServerDisconnectPacket disconnect_packet;
-			disconnect_packet.header.type = SERVER_PACKET_DISCONNECT;
-			platform_send_packet(server->socket, i, &disconnect_packet, sizeof(disconnect_packet));
+			ServerDisconnectMessage disconnect_message;
+			disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
+			platform_send_packet(server->socket, i, &disconnect_message, sizeof(disconnect_message));
 
 			platform_free_connection(server->socket, i);
 			server->connections[i].state = SERVER_CONNECTION_OPEN;
@@ -258,9 +257,9 @@ void server_update_active(Server* server, f32 delta_time)
 				other_id = 1;
 			}
 
-			ServerEndGamePacket end_packet;
-			end_packet.header.type = SERVER_PACKET_END_GAME;
-			platform_send_packet(server->socket, other_id, &end_packet, sizeof(end_packet));
+			ServerEndGameMessage end_message;
+			end_message.type = SERVER_MESSAGE_END_GAME;
+			platform_send_packet(server->socket, other_id, &end_message, sizeof(end_message));
 			printf("Sent end game packet to %u.\n", other_id);
 
 			server_reset_game(server);
@@ -289,13 +288,13 @@ void server_update_active(Server* server, f32 delta_time)
 		server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
 	}
 
-	ServerWorldUpdatePacket update_packet = {};
-	update_packet.header.type = SERVER_PACKET_WORLD_UPDATE;
-	update_packet.frame = server->frame;
-	update_packet.world = server->world;
+	ServerWorldUpdateMessage update_message = {};
+	update_message.type = SERVER_MESSAGE_WORLD_UPDATE;
+	update_message.frame = server->frame;
+	update_message.world = server->world;
 
 	for(u8 i = 0; i < 2; i++) {
-		platform_send_packet(server->socket, i, &update_packet, sizeof(update_packet));
+		platform_send_packet(server->socket, i, &update_message, sizeof(update_message));
 	}
 	server->frame++;
 }

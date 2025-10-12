@@ -156,32 +156,32 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	}
 	client_simulate_frame(world, client);
 
-	ClientInputPacket input_packet = {};
-	input_packet.header.type = CLIENT_PACKET_INPUT;
-	input_packet.latest_frame = client->frame;
+	ClientInputMessage input_message = {};
+	input_message.type = CLIENT_MESSAGE_INPUT;
+	input_message.latest_frame = client->frame;
 
-	input_packet.oldest_frame = client->frame - INPUT_WINDOW_FRAMES + 1;
-	if(input_packet.oldest_frame < 0) { 
-		input_packet.oldest_frame = 0;
+	input_message.oldest_frame = client->frame - INPUT_WINDOW_FRAMES + 1;
+	if(input_message.oldest_frame < 0) { 
+		input_message.oldest_frame = 0;
 	}
 
-	i32 frame_delta = input_packet.latest_frame - input_packet.oldest_frame;
+	i32 frame_delta = input_message.latest_frame - input_message.oldest_frame;
 	for(i32 i = 0; i <= frame_delta; i++) {
 		i32 input_frame = client->frame - frame_delta + i;
 	
 		World* input_world = &client_state_from_frame(client, input_frame)->world;
 		assert(client_state_from_frame(client, input_frame)->frame == input_frame);
 		
-		input_packet.input_moves_up[i] = (input_world->player_inputs[client->id].move_up > 0.0f);
-		input_packet.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
+		input_message.input_moves_up[i] = (input_world->player_inputs[client->id].move_up > 0.0f);
+		input_message.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
 	}
 
-	platform_send_packet(client->socket, 0, &input_packet, sizeof(ClientInputPacket));
+	platform_send_packet(client->socket, 0, &input_message, sizeof(input_message));
 
 	client->frame++;
 }
 
-// Packet handling functions
+// Message handling functions
 void client_handle_world_update(Client* client, ClientWorldState* server_state, Platform* platform)
 {
 	i32 update_frame = server_state->frame;
@@ -278,7 +278,7 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
-void client_process_packets(Client* client)
+void client_pull_messages(Client* client)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
@@ -291,33 +291,33 @@ void client_process_packets(Client* client)
 		void* data = packet->data;
 		u8 type = *(u8*)packet->data;
 		switch(type) {
-			case SERVER_PACKET_WORLD_UPDATE:
-				update_state.world = ((ServerWorldUpdatePacket*)data)->world;
-				update_state.frame = ((ServerWorldUpdatePacket*)data)->frame;
+			case SERVER_MESSAGE_WORLD_UPDATE:
+				update_state.world = ((ServerWorldUpdateMessage*)data)->world;
+				update_state.frame = ((ServerWorldUpdateMessage*)data)->frame;
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_WORLD_UPDATE, 
 					.world_update = update_state 
 				}); 
 				break;
-			case SERVER_PACKET_ACCEPT_CONNECTION:
+			case SERVER_MESSAGE_ACCEPT_CONNECTION:
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
-					.assigned_id = ((ServerAcceptConnectionPacket*)data)->client_id 
+					.assigned_id = ((ServerAcceptConnectionMessage*)data)->client_id 
 				});
 				break;
-			case SERVER_PACKET_START_GAME:
+			case SERVER_MESSAGE_START_GAME:
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_START_GAME }); 
 				break;
-			case SERVER_PACKET_END_GAME:
+			case SERVER_MESSAGE_END_GAME:
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
 				break;
-			case SERVER_PACKET_DISCONNECT:
+			case SERVER_MESSAGE_DISCONNECT:
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_DISCONNECT }); 
 				break;
-			case SERVER_PACKET_SPEED_UP:
+			case SERVER_MESSAGE_SPEED_UP:
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SPEED_UP }); 
 				break;
-			case SERVER_PACKET_SLOW_DOWN:
+			case SERVER_MESSAGE_SLOW_DOWN:
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SLOW_DOWN }); 
 				break;
 			default: break;
@@ -343,9 +343,9 @@ void client_render_box(RenderState* render_state, Rect box, Platform* platform)
 
 void client_update_requesting_connection(Client* client, Platform* platform, RenderState* render_state)
 {
-	ClientRequestConnectionPacket request_packet;
-	request_packet.header.type = CLIENT_PACKET_REQUEST_CONNECTION;
-	platform_send_packet(client->socket, 0, (void*)&request_packet, sizeof(request_packet));
+	ClientRequestConnectionMessage request_message;
+	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
+	platform_send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -365,9 +365,9 @@ void client_update_requesting_connection(Client* client, Platform* platform, Ren
 
 void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
 {
-	ClientReadyToStartPacket ready_packet;
-	ready_packet.header.type = CLIENT_PACKET_READY_TO_START;
-	platform_send_packet(client->socket, 0, &ready_packet, sizeof(ready_packet));
+	ClientReadyToStartMessage ready_message;
+	ready_message.type = CLIENT_MESSAGE_READY_TO_START;
+	platform_send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
 
 	// Render "connecting" indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -466,7 +466,7 @@ void client_process_events(Client* client, Platform* platform)
 // the game layer. It will pull from either the client or world state.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
-	client_process_packets(client);
+	client_pull_messages(client);
 	client_process_events(client, platform);
 
 #if NETWORK_SIM_MODE

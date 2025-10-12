@@ -8,7 +8,7 @@
 
 #include "game/common/config.cpp"
 #include "game/common/world.cpp"
-#include "game/common/packets.cpp"
+#include "game/common/messages.cpp"
 #include "game/server/server.cpp"
 #include "game/client/client.cpp"
 #include "game/client/game.cpp"
