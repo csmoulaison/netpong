@@ -1,4 +1,5 @@
 #define WORLD_STATE_BUFFER_SIZE 64
+#define MAX_CLIENT_EVENTS 256
 
 #define FRAME_LENGTH_MOD 0.01f
 
@@ -13,33 +14,35 @@ struct ClientWorldState {
 	World world;
 };
 
-/* NOW: Implement event queue.
 enum ClientEventType {
-	CLIENT_EVENT_WORLD_UPDATE;
-	CLIENT_EVENT_START_GAME;
-	CLIENT_EVENT_END_GAME;
-	CLIENT_EVENT_CONNECTION_ACCEPTED;
-	CLIENT_EVENT_DISCONNECT;
-	CLIENT_EVENT_INPUT_MOVE_UP;
-	CLIENT_EVENT_INPUT_MOVE_DOWN;
-	CLIENT_EVENT_SPEED_UP;
-	CLIENT_EVENT_SLOW_DOWN;
+	CLIENT_EVENT_WORLD_UPDATE,
+	CLIENT_EVENT_START_GAME,
+	CLIENT_EVENT_END_GAME,
+	CLIENT_EVENT_CONNECTION_ACCEPTED,
+	CLIENT_EVENT_DISCONNECT,
+	CLIENT_EVENT_INPUT_MOVE_UP,
+	CLIENT_EVENT_INPUT_MOVE_DOWN,
+	CLIENT_EVENT_SPEED_UP,
+	CLIENT_EVENT_SLOW_DOWN
 };
 
 struct ClientEvent {
 	ClientEventType type;
-	union {
+	/* Type specific data
+    union {
 
 	};
+	*/
 };
-*/
 
 struct Client {
-	// NOW: delete and move to queue.
-	ButtonHandle button_move_up;
-	ButtonHandle button_move_down;
-
 	PlatformSocket* socket;
+
+	ClientEvent events[MAX_CLIENT_EVENTS];
+	u32 events_len;
+
+	bool move_up;
+	bool move_down;
 
 	ClientConnectionState connection_state;
 	i8 id;
@@ -85,9 +88,9 @@ Client* client_init(Platform* platform, Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
-	// NOW: move into client event queue.
-	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
-	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
+	client->events_len = 0;
+	client->move_up = false;
+	client->move_down = false;
 
 	client->socket = platform_init_client_socket(arena, ip_string);
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
@@ -137,12 +140,12 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 	current_state->frame = client->frame;
 	World* world = &current_state->world;
 
-	if(platform_button_down(platform, client->button_move_up)) {
+	if(client->move_up) {
 		world->player_inputs[client->id].move_up = 1.0f;
 	} else {
 		world->player_inputs[client->id].move_up = 0.0f;
 	}
-	if(platform_button_down(platform, client->button_move_down)) {
+	if(client->move_down) {
 		world->player_inputs[client->id].move_down = 1.0f;
 	} else {
 		world->player_inputs[client->id].move_down = 0.0f;
@@ -396,11 +399,31 @@ void client_update_active(Client* client, Platform* platform, RenderState* rende
 	client_render_box(render_state, ball, platform);
 }
 
+void client_process_events(Client* client)
+{
+	client->move_up = false;
+	client->move_down = false;
+	for(u32 i = 0; i < client->events_len; i++) {
+		ClientEvent* event = &client->events[i];
+		switch(event->type) {
+			case CLIENT_EVENT_INPUT_MOVE_UP:
+				client->move_up = true; 
+				break;
+			case CLIENT_EVENT_INPUT_MOVE_DOWN:
+				client->move_down = true; 
+				break;
+			default: break;
+		}
+	}
+	client->events_len = 0;
+}
+
 // NOW: Get rid of platform and render_state here. Rendering should be done by
 // the game layer. It will pull from either the client or world state.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
 	client_process_packets(client, platform);
+	client_process_events(client);
 
 #if NETWORK_SIM_MODE
 	// TODO: It is certainly wrong to use client->frame_length for this, and we

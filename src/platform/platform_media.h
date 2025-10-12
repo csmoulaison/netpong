@@ -48,6 +48,8 @@ void platform_update(Platform* platform, Arena* arena);
 // has performed an update.
 void platform_swap_buffers(Platform* platform);
 
+// TODO: move this to platform_input
+// 
 // Returns an identifier that can be used to check the state of a particular
 // keycode (assigned to a button) at a later time.
 ButtonHandle platform_register_key(Platform* platform, u32 keycode);

@@ -1,10 +1,8 @@
 struct Game {
 	bool close_requested;
 
-	/*
 	ButtonHandle button_move_up;
 	ButtonHandle button_move_down;
-	*/
 	ButtonHandle button_quit;
 
 	Client* client;
@@ -16,10 +14,8 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 
 	game->close_requested = false;
 
-	/*
 	game->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	game->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
-	*/
 	game->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
 	game->client = client_init(platform, arena, ip_string);
@@ -29,7 +25,17 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 
 void game_update(Game* game, Platform* platform, RenderState* render_state)
 {
-	client_update(game->client, platform, render_state);
+	Client* client = game->client;
+	if(platform_button_down(platform, game->button_move_up)) {
+		client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_UP;
+		client->events_len++;
+	}
+	if(platform_button_down(platform, game->button_move_down)) {
+		client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
+		client->events_len++;
+	}
+	
+	client_update(client, platform, render_state);
 	game->close_requested = platform_button_down(platform, game->button_quit);
 }
 
