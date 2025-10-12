@@ -1,6 +1,6 @@
 #define WORLD_STATE_BUFFER_SIZE 64
 
-#define FRAME_LENGTH_MOD 0.02f
+#define FRAME_LENGTH_MOD 0.01f
 
 enum ClientConnectionState {
 	CLIENT_STATE_REQUESTING_CONNECTION,
@@ -13,24 +13,42 @@ struct ClientWorldState {
 	World world;
 };
 
+/* NOW: Implement event queue.
+enum ClientEventType {
+	CLIENT_EVENT_WORLD_UPDATE;
+	CLIENT_EVENT_START_GAME;
+	CLIENT_EVENT_END_GAME;
+	CLIENT_EVENT_CONNECTION_ACCEPTED;
+	CLIENT_EVENT_DISCONNECT;
+	CLIENT_EVENT_INPUT_MOVE_UP;
+	CLIENT_EVENT_INPUT_MOVE_DOWN;
+	CLIENT_EVENT_SPEED_UP;
+	CLIENT_EVENT_SLOW_DOWN;
+};
+
+struct ClientEvent {
+	ClientEventType type;
+	union {
+
+	};
+};
+*/
+
 struct Client {
-	// TODO: Probably abstract the platform socket away into a proxy socket for
-	// local play.
+	// NOW: delete and move to queue.
+	ButtonHandle button_move_up;
+	ButtonHandle button_move_down;
+
 	PlatformSocket* socket;
 
 	ClientConnectionState connection_state;
 	i8 id;
-	bool close_requested;
 
 	// The buffer holds present and past states of the game simulation.
 	ClientWorldState states[WORLD_STATE_BUFFER_SIZE];
 	i32 frame;
 
 	double frame_length;
-
-	ButtonHandle button_move_up;
-	ButtonHandle button_move_down;
-	ButtonHandle button_quit;
 
 	f32 visual_ball_position[2];
 	f32 visual_paddle_positions[2];
@@ -59,9 +77,6 @@ void client_reset_game(Client* client)
 	for(i32 i = 0; i < WORLD_STATE_BUFFER_SIZE; i++) {
 		client->states[i].frame = -1;
 
-		// TODO: Theoretically, we don't need to do this, eh? I figure we might as
-		// well and figure out if we need to later.
-		client->states[i].world = {};
 		world_init(&client->states[i].world);
 	}
 }
@@ -70,14 +85,13 @@ Client* client_init(Platform* platform, Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
+	// NOW: move into client event queue.
+	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
+	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
+
 	client->socket = platform_init_client_socket(arena, ip_string);
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
 	client->id = -1;
-	client->close_requested = false;
-
-	client->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
-	client->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
-	client->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
 	client_reset_game(client);
 
@@ -137,7 +151,6 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 
 	ClientInputPacket input_packet = {};
 	input_packet.header.type = CLIENT_PACKET_INPUT;
-	input_packet.header.client_id = client->id;
 	input_packet.latest_frame = client->frame;
 
 	input_packet.oldest_frame = client->frame - INPUT_WINDOW_FRAMES + 1;
@@ -258,7 +271,6 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
-// NOW: Process packets with new scheme.
 void client_process_packets(Client* client, Platform* platform)
 {
 	// TODO: Allocate arena from existing arena.
@@ -330,7 +342,6 @@ void client_update_waiting_to_start(Client* client, Platform* platform, RenderSt
 {
 	ClientReadyToStartPacket ready_packet;
 	ready_packet.header.type = CLIENT_PACKET_READY_TO_START;
-	ready_packet.header.client_id = client->id;
 	platform_send_packet(client->socket, 0, &ready_packet, sizeof(ready_packet));
 
 	// Render "connecting" indicator.
@@ -385,8 +396,8 @@ void client_update_active(Client* client, Platform* platform, RenderState* rende
 	client_render_box(render_state, ball, platform);
 }
 
-// We will probably want to package input from platform and input as needed here
-// separately, but that's feeling a little icky.
+// NOW: Get rid of platform and render_state here. Rendering should be done by
+// the game layer. It will pull from either the client or world state.
 void client_update(Client* client, Platform* platform, RenderState* render_state) 
 {
 	client_process_packets(client, platform);
@@ -410,11 +421,5 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 			break;
 		default: break;
 	}
-
-	client->close_requested = platform_button_down(platform, client->button_quit);
 }
 
-bool client_close_requested(Client* client)
-{
-	return client->close_requested;
-}

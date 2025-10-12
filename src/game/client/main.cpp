@@ -14,6 +14,7 @@
 #include "game/common/packets.cpp"
 #include "game/server/server.cpp"
 #include "game/client/client.cpp"
+#include "game/client/game.cpp"
 
 i32 main(i32 argc, char** argv)
 {
@@ -24,12 +25,12 @@ i32 main(i32 argc, char** argv)
 
 	platform_init_post_graphics(platform);
 
-	Client* client;
+	Game* game;
 	char* ip_string = nullptr;
 	if(argc > 1) {
 		ip_string = argv[1];
 	}
-	client = client_init(platform, &program_arena, nullptr);
+	game = game_init(platform, &program_arena, nullptr);
 
 	RenderState* previous_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
@@ -41,7 +42,7 @@ i32 main(i32 argc, char** argv)
 
 	bool first_frame = true;
 
-	while(client_close_requested(client) != true) {
+	while(game_close_requested(game) != true) {
 		double new_time = platform_time_in_seconds();
 		double frame_time = new_time - current_time;
 		if(frame_time > 0.25f) {
@@ -50,23 +51,25 @@ i32 main(i32 argc, char** argv)
 		current_time = new_time;
 		time_accumulator += frame_time;
 
-		while(time_accumulator >= client->frame_length) {
+		// NOW: game->client->frame_length won't be a given when a client might not
+		// exist or if there are more than one of them.
+		while(time_accumulator >= game->client->frame_length) {
 			platform_update(platform, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
 			*current_render_state = {};
-			client_update(client, platform, current_render_state);
+			game_update(game, platform, current_render_state);
 
 			if(first_frame) {
 				memcpy(previous_render_state, current_render_state, sizeof(RenderState));
 				first_frame = false;
 			}
 
-			time_accumulator -= client->frame_length;
-			time += client->frame_length;
+			time_accumulator -= game->client->frame_length;
+			time += game->client->frame_length;
 		}
 
-		double time_alpha = time_accumulator / client->frame_length;
+		double time_alpha = time_accumulator / game->client->frame_length;
 		RenderState interpolated_render_state = renderer_interpolate_states(previous_render_state, current_render_state, time_alpha);
 
 		// Render based on render states now.

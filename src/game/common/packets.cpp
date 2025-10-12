@@ -1,25 +1,7 @@
-// TODO: Eventually packets become the following:
-// 
-// struct Packet {
-//     u8 type;
-//     void* data;
-// }
-//
-// Each packet type, from both client and server, will have a unique 8 bit id.
-// The data will be serialized using read/write serialization methods and stored
-// in the void* data member.
-
-#define PACKET_CLIENT_REQUEST_CONNECTION 0
-#define PACKET_CLIENT_READY_TO_START 1
-#define PACKET_CLIENT_INPUT 2
-
-#define PACKET_SERVER_ACCEPT_CONNECTION 3
-#define PACKET_SERVER_START_GAME 4
-#define PACKET_SERVER_END_GAME 5
-#define PACKET_SERVER_DISCONNECT 6
-#define PACKET_SERVER_WORLD_UPDATE 7
-#define PACKET_SERVER_SPEED_UP 8
-#define PACKET_SERVER_SLOW_DOWN 9
+// TODO: Compression! (bitpacking, delta compression, etc)
+// This can be done one at a time, really. Just pack one and unpack it on the
+// other end. Once we've done a few we can think about how to systemetize it
+// further if that seems necessary.
 
 // Client packets
 enum ClientPacketType {
@@ -30,7 +12,6 @@ enum ClientPacketType {
 
 struct ClientPacketHeader {
 	ClientPacketType type;
-	i32 client_id;
 };
 
 struct ClientRequestConnectionPacket {
