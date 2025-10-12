@@ -263,11 +263,12 @@ void client_process_packets(Client* client, Platform* platform)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPacketNode* node = platform_receive_packets(client->socket,&packet_arena);
+	PlatformPacket* packet = platform_receive_packets(client->socket,&packet_arena);
 
-	while(node != nullptr) {
-		PlatformPackit* packet = (PlatformPackit*)packet_head->packet;
-		switch(packet->type) {
+	while(packet != nullptr) {
+		void* data = packet->data;
+		u8 type = *(u8*)packet->data;
+		switch(type) {
 			case SERVER_PACKET_WORLD_UPDATE:
 				client_handle_world_update(client, (ServerWorldUpdatePacket*)packet->data, platform); break;
 			case SERVER_PACKET_ACCEPT_CONNECTION:
@@ -284,7 +285,7 @@ void client_process_packets(Client* client, Platform* platform)
 				client_handle_slow_down(client); break;
 			default: break;
 		}
-		node = node->next;
+		packet = packet->next;
 	}
 	arena_destroy(&packet_arena);
 }

@@ -141,11 +141,12 @@ void server_process_packets(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPacketNode* node = platform_receive_packets(server->socket, &packet_arena);
+	PlatformPacket* packet = platform_receive_packets(server->socket, &packet_arena);
 
-	while(node != nullptr) {
-		PlatformPackit* packet = (PlatformPackit*)packet_head->packet;
-		switch(header->type) {
+	while(packet != nullptr) {
+		u8 type = *(u8*)packet->data;
+		void* data = packet->data;
+		switch(type) {
 			case CLIENT_PACKET_REQUEST_CONNECTION:
 				server_handle_connection_request(server, packet->connection_id); break;
 			case CLIENT_PACKET_READY_TO_START:
@@ -154,7 +155,7 @@ void server_process_packets(Server* server)
 				server_handle_client_input(server, packet->connection_id, (ClientInputPacket*)packet->data); break;
 			default: break;
 		}
-		node = node->next;
+		packet = packet->next;
 	}
 	arena_destroy(&packet_arena);
 }

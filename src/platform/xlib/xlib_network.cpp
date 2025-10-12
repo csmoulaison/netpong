@@ -136,7 +136,7 @@ void platform_free_connection(PlatformSocket* socket, i32 connection_id)
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
 // 
 // NOW: Send packet with new model.
-void xlib_send_packet(PlatformSocket* socket, PlatformPackit* packet, u32 size)
+void xlib_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size)
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
@@ -192,34 +192,33 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 }
 
 // NOW: Receive packets.
-PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
+PlatformPacket* platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
-	PlatformPayload payload;
-	payload.head = nullptr;
-	PlatformPacket** current_packet = &payload.head;
+	PlatformPacket* head = nullptr;
+	PlatformPacket** current_node = &head;
 
 	while(true) {
 		struct sockaddr_in sender_address;
 		socklen_t len = sizeof(struct sockaddr_in);
 
-		char data[MAX_PACKET_BYTES];
-		i32 data_size = recvfrom(sock->descriptor, data, MAX_PACKET_BYTES, 
+		char packet[MAX_PACKET_BYTES];
+		i32 packet_size = recvfrom(sock->descriptor, packet, MAX_PACKET_BYTES, 
 			MSG_WAITALL, (struct sockaddr*)&sender_address, &len);
 
 		// -1 means there are no more packets.
-		if(data_size != -1) { 
-			if(*current_packet != nullptr) {
-				(*current_packet)->next = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
-				current_packet = &(*current_packet)->next;
+		if(packet_size != -1) { 
+			if(*current_node != nullptr) {
+				(*current_node)->next = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
+				current_node = &(*current_node)->next;
 			} else {
-				*current_packet = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
+				*current_node = (PlatformPacket*)arena_alloc(arena, sizeof(PlatformPacket));
 			}
-			(*current_packet)->next = nullptr;
+			(*current_node)->next = nullptr;
 
-			PlatformPacket* packet = *current_packet;
-			packet->data_size = data_size;
-			packet->data = (char*)arena_alloc(arena, data_size);
+			PlatformPacket* node = *current_node;
+			node->size = packet_size;
+			node->data = (void*)arena_alloc(arena, packet_size);
 
 			if(socket->type == SOCKET_TYPE_SERVER) {
 				// Compare against other connections.
@@ -229,19 +228,19 @@ PlatformPayload platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 					struct sockaddr_in* existing_address = &existing_connection->address;
 
 					if(existing_address->sin_addr.s_addr == sender_address.sin_addr.s_addr && existing_address->sin_port == sender_address.sin_port) {
-						packet->connection_id = sock->connections[i].id;
+						node->connection_id = sock->connections[i].id;
 						connection_already_exists = true;
 					}
 				}
 				if(!connection_already_exists) {
-					packet->connection_id = platform_add_connection(socket, &sender_address);
+					node->connection_id = platform_add_connection(socket, &sender_address);
 				}
 			} else { // socket->type == SOCKET_TYPE_CLIENT
-				packet->connection_id = 0;
+				node->connection_id = 0;
 			}
-			memcpy(packet->data, data, data_size);
+			memcpy(node->data, packet, packet_size);
 		} else {
-			return payload;
+			return head;
 		}
 	}
 

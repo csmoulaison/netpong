@@ -51,17 +51,12 @@ struct PlatformSocket {
 // serialization stuff.
 // 
 // NOW: Rename to PlatformPacket once we are transitioned.
-struct PlatformPackit {
+struct PlatformPacket {
+	PlatformPacket* next;
+
 	i32 connection_id;
-	u16 type;
 	void* data;
-};
-
-struct PlatformPacketNode {
-	PlatformPacketNode* next;
-
-	PlatformPackit packet;
-	u32 data_size;
+	u32 size;
 };
 
 // Opens a UDP socket for the host server.
@@ -82,7 +77,7 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 
 // Pull all packets received since the previous call of this function. The
 // packets are allocated to the given memory arena, so remember to free it.
-PlatformPacketNode* platform_receive_packets(PlatformSocket* socket, Arena* arena);
+PlatformPacket* platform_receive_packets(PlatformSocket* socket, Arena* arena);
 
 #if NETWORK_SIM_MODE
 
