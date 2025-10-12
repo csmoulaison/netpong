@@ -27,9 +27,6 @@ struct XlibSocket {
 	i32 id_to_connection[MAX_CLIENTS];
 };
 
-// TODO: I think we are probably moving towards a world where server/client
-// sockets aren't distinguished on the platform level. All those distinctions
-// should probably live on the other side of the pond.
 PlatformSocket* platform_init_server_socket(Arena* arena)
 {
 	PlatformSocket* platform_socket = (PlatformSocket*)arena_alloc(arena, sizeof(PlatformSocket));
@@ -134,8 +131,6 @@ void platform_free_connection(PlatformSocket* socket, i32 connection_id)
 }
 
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
-// 
-// NOW: Send packet with new model.
 void xlib_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size)
 {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
@@ -147,7 +142,6 @@ void xlib_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u
 
 #if NETWORK_SIM_MODE == true
 
-// NOW: See if this needs amending with the new model.
 void platform_update_sim_mode(PlatformSocket* socket, f32 dt) 
 {
 	for(i32 i = 0; i < socket->sim_packets_len; i++) {
@@ -167,7 +161,6 @@ void platform_update_sim_mode(PlatformSocket* socket, f32 dt)
 
 #endif
 
-// NOW: Platform send packet as well yeah.
 void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packet, u32 size) {
 #if NETWORK_SIM_MODE == true
 	if(random_f32() < NETWORK_SIM_PACKET_LOSS_CHANCE) {
@@ -191,7 +184,6 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 	xlib_send_packet(socket, connection_id, packet, size);
 }
 
-// NOW: Receive packets.
 PlatformPacket* platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 

@@ -44,13 +44,6 @@ struct PlatformSocket {
 #endif
 };
 
-// NOW: < THIS: This way of doing things makes it a little bit awkward in the
-// sense that all of this needs to be transmitted over the network, at least the
-// type does. I suppose we will want to fold all of this down into a void* create
-// a serialize function for the header that can be composed with the main packet
-// serialization stuff.
-// 
-// NOW: Rename to PlatformPacket once we are transitioned.
 struct PlatformPacket {
 	PlatformPacket* next;
 
