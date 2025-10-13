@@ -196,7 +196,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 	glClearColor(0.0f, 0.0f, 0.0f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-	// Draw boxes
+	// Draw rects
 	glUseProgram(gl->box_program);
 	u32 box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
 	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->box_ubo);
@@ -204,10 +204,10 @@ void renderer_update(Renderer* renderer, RenderState* render_state, Platform* pl
 
 	glBindVertexArray(gl->quad_vao);
 
-	for(u32 i = 0; i < render_state->boxes_len; i++)
+	for(u32 i = 0; i < render_state->rects_len; i++)
 	{
 		// Update ubo
-		Rect box = render_state->boxes[i];
+		Rect box = render_state->rects[i];
 
 		BoxUbo box_ubo = {
 			.translation = {

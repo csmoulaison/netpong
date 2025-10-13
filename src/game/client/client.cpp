@@ -332,40 +332,12 @@ void client_receive_messages(Client* client)
 	arena_destroy(&packet_arena);
 }
 
-// Client update functions
-void client_render_box(RenderState* render_state, Rect box, Platform* platform)
-{
-	f32 x_scale = (f32)platform->window_height / platform->window_width;
-
-	Rect* rect = &render_state->boxes[render_state->boxes_len];
-	render_state->boxes_len += 1;
-
-	rect->x = box.x * x_scale;
-	rect->y = box.y;
-	rect->w = box.w;
-	rect->h = box.h;
-}
-
 void client_update_requesting_connection(Client* client, Platform* platform, RenderState* render_state)
 {
 	ClientRequestConnectionMessage request_message;
 	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
 	platform_send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
 
-	// Render "connecting" indicator.
-	for(u8 i = 0; i < 3; i++) {
-		f32 xoff = -1000.0f;
-		if((client->frame / 60) % 3 == 0) {
-			xoff = 0.0f;
-		}
-	
-		Rect box;
-		box.x = -0.75f + xoff;
-		box.y = 0.75f;
-		box.w = 0.025f;
-		box.h = 0.025f;
-		client_render_box(render_state, box, platform);
-	}
 }
 
 void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
@@ -374,56 +346,11 @@ void client_update_waiting_to_start(Client* client, Platform* platform, RenderSt
 	ready_message.type = CLIENT_MESSAGE_READY_TO_START;
 	platform_send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
 
-	// Render "connecting" indicator.
-	for(u8 i = 0; i < 3; i++) {
-		f32 xoff = 0.0f;
-		xoff += ((client->frame / 30) % 3) * 0.025;
-
-		Rect box;
-		box.x = -0.75f + xoff;
-		box.y = 0.75f;
-		box.w = 0.025f;
-		box.h = 0.025f;
-		client_render_box(render_state, box, platform);
-	}
-}
-
-void client_visual_lerp(f32* visual, f32 real, f32 dt)
-{
-	*visual = lerp(*visual, real, VISUAL_SMOOTHING_SPEED * dt);
-	if(abs(*visual - real) < VISUAL_SMOOTHING_EPSILON) {
-		*visual = real;
-	}
 }
 
 void client_update_active(Client* client, Platform* platform, RenderState* render_state)
 {
 	client_simulate_and_advance_frame(client, platform);
-
-	World* world = &client_state_from_frame(client, client->frame - 1)->world;
-
-	client_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
-	client_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
-
-	i8 other_id = client_get_other_id(client);
-	client_visual_lerp(&client->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
-	client->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
-
-	// Render
-	for(u8 i = 0; i < 2; i++) {
-		Rect paddle;
-		paddle.x = -PADDLE_X + i * PADDLE_X * 2.0f;
-		paddle.y = client->visual_paddle_positions[i];
-		paddle.w = PADDLE_WIDTH;
-		paddle.h = PADDLE_HEIGHT;
-		client_render_box(render_state, paddle, platform);
-	}
-	Rect ball;
-	ball.x = client->visual_ball_position[0];
-	ball.y = client->visual_ball_position[1];
-	ball.w = BALL_WIDTH;
-	ball.h = BALL_WIDTH;
-	client_render_box(render_state, ball, platform);
 }
 
 void client_process_events(Client* client, Platform* platform)

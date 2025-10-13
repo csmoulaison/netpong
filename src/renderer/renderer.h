@@ -2,7 +2,7 @@
 #define renderer_h_INCLUDED
 
 #define RENDERER_NO_INTERPOLATION false
-#define RENDER_LIST_BOXES_MAX 10
+#define RENDER_LIST_RECTS_MAX 10
 
 #include "base/base.h"
 #include "platform/platform_media.h"
@@ -15,8 +15,8 @@ struct RendererInitSettings{
 };
 
 struct RenderState {
-	Rect boxes[RENDER_LIST_BOXES_MAX];
-	u8 boxes_len;
+	Rect rects[RENDER_LIST_RECTS_MAX];
+	u8 rects_len;
 };
 
 Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena);
@@ -31,16 +31,16 @@ RenderState renderer_interpolate_states(RenderState* previous, RenderState* curr
 #endif
 
 	// TODO - handle differing numbers of cubes. we assert that this isn't the case for now.
-	assert(previous->boxes_len == current->boxes_len);
+	assert(previous->rects_len == current->rects_len);
 
 	RenderState interpolated;
-	interpolated.boxes_len = current->boxes_len;
+	interpolated.rects_len = current->rects_len;
 	
-	for(u32 i = 0; i < previous->boxes_len; i++) {
-		interpolated.boxes[i].x = lerp(previous->boxes[i].x, current->boxes[i].x, t);
-		interpolated.boxes[i].y = lerp(previous->boxes[i].y, current->boxes[i].y, t);
-		interpolated.boxes[i].w = lerp(previous->boxes[i].w, current->boxes[i].w, t);
-		interpolated.boxes[i].h = lerp(previous->boxes[i].h, current->boxes[i].h, t);
+	for(u32 i = 0; i < previous->rects_len; i++) {
+		interpolated.rects[i].x = lerp(previous->rects[i].x, current->rects[i].x, t);
+		interpolated.rects[i].y = lerp(previous->rects[i].y, current->rects[i].y, t);
+		interpolated.rects[i].w = lerp(previous->rects[i].w, current->rects[i].w, t);
+		interpolated.rects[i].h = lerp(previous->rects[i].h, current->rects[i].h, t);
 	}
 
 	return interpolated;
