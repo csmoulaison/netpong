@@ -43,6 +43,7 @@
 
 struct Game {
 	bool close_requested;
+	u32 frames_since_init;
 
 	ButtonHandle button_move_up;
 	ButtonHandle button_move_down;
@@ -58,6 +59,7 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	Game* game = (Game*)arena_alloc(arena, sizeof(Game));
 
 	game->close_requested = false;
+	game->frames_since_init = 0;
 
 	game->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
 	game->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
@@ -91,13 +93,12 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-// NOW: Remove reference to client frame in here.
-void render_requesting_connection_state(Client* client, RenderState* render_state, Platform* platform) 
+void render_requesting_connection_state(Game* game, RenderState* render_state, Platform* platform) 
 {
-	// Render "connecting" indicator.
+	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
 		f32 xoff = -1000.0f;
-		if((client->frame / 60) % 3 == 0) {
+		if((game->frames_since_init / 60) % 3 == 0) {
 			xoff = 0.0f;
 		}
 	
@@ -110,12 +111,12 @@ void render_requesting_connection_state(Client* client, RenderState* render_stat
 	}
 }
 
-void render_waiting_to_start_state(Client* client, RenderState* render_state, Platform* platform) 
+void render_waiting_to_start_state(Game* game, RenderState* render_state, Platform* platform) 
 {
-	// Render "connecting" indicator.
+	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
 		f32 xoff = 0.0f;
-		xoff += ((client->frame / 30) % 3) * 0.025;
+		xoff += ((game->frames_since_init / 30) % 3) * 0.025;
 
 		Rect rect;
 		rect.x = -0.75f + xoff;
@@ -127,8 +128,10 @@ void render_waiting_to_start_state(Client* client, RenderState* render_state, Pl
 }
 
 // NOW: Remove reference to client and figure out how we want it factored out.
-void render_state_from_world(Client* client, RenderState* render_state, Platform* platform)
+void render_state_from_world(Game* game, RenderState* render_state, Platform* platform)
 {
+	Client* client = game->client;
+
 	World* world = &client_state_from_frame(client, client->frame - 1)->world;
 	render_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
 	render_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
@@ -173,19 +176,20 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 
 		switch(client->connection_state) {
 			case CLIENT_STATE_REQUESTING_CONNECTION:
-				render_requesting_connection_state(client, render_state, platform);
+				render_requesting_connection_state(game, render_state, platform);
 				break;
 			case CLIENT_STATE_WAITING_TO_START:
-				render_waiting_to_start_state(client, render_state, platform);
+				render_waiting_to_start_state(game, render_state, platform);
 				break;
 			case CLIENT_STATE_ACTIVE:
-				render_state_from_world(client, render_state, platform);
+				render_state_from_world(game, render_state, platform);
 				break;
 			default: break;
 		}
 	}
 
 	game->close_requested = platform_button_down(platform, game->button_quit);
+	game->frames_since_init++;
 }
 
 bool game_close_requested(Game* game)
