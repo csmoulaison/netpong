@@ -1,3 +1,10 @@
+// NOW: Determines the type of client server setup we have. Temporary until we
+// allow the user to switch between them at runtime.
+#define CONFIG_REMOTE 0
+#define CONFIG_FULL_LOCAL 1
+#define CONFIG_HALF_LOCAL 2
+#define CONFIG_SETTING CONFIG_REMOTE
+
 #define BASE_FRAME_LENGTH 0.01f
 
 #define START_COUNTDOWN_SECONDS 1.0f
@@ -9,9 +16,9 @@
 #define VISUAL_SMOOTHING_SPEED 10.0f
 #define VISUAL_SMOOTHING_EPSILON 0.001f
 
-#define PADDLE_ACCELERATION 5.0f
+#define PADDLE_ACCELERATION 10.0f
 #define PADDLE_MAX_SPEED 1.5f
-#define PADDLE_FRICTION 2.0f
+#define PADDLE_FRICTION 5.0f
 #define BALL_SPEED_INIT_X 0.75f
 #define BALL_SPEED_INIT_Y BALL_SPEED_INIT_X / 2.0f
 

@@ -16,7 +16,7 @@
 i32 main(i32 argc, char** argv)
 {
 	Arena program_arena = arena_create(GIGABYTE);
-	Server* server = server_init(&program_arena);
+	Server* server = server_init(&program_arena, true);
 
 	double time = 0.0f;
 	double delta_time = BASE_FRAME_LENGTH;

@@ -28,18 +28,18 @@ struct ServerEvent {
 	ServerEventType type;
 	i32 client_id;
     union {
-		ClientInputMessage client_input;
+		ClientInput client_input;
 	};
 };
 
-enum ServerConnectionState {
+enum ServerSlotState {
 	SERVER_CONNECTION_OPEN,
 	SERVER_CONNECTION_PENDING,
 	SERVER_CONNECTION_ACTIVE
 };
 
-struct ServerConnection {
-	ServerConnectionState state;
+struct ServerSlot {
+	ServerSlotState state;
 	// absolute frame % INPUT_BUFFER_SIZE = frame index
 	ClientInput inputs[INPUT_BUFFER_SIZE];
 	f32 ready_timeout_countdown;
@@ -47,7 +47,7 @@ struct ServerConnection {
 
 struct Server {
 	PlatformSocket* socket;
-	ServerConnection connections[2];
+	ServerSlot connections[2];
 
 	ServerEvent events[MAX_SERVER_EVENTS];
 	u32 events_len;
@@ -65,7 +65,7 @@ void server_reset_game(Server* server)
 {
 	server->frame = 0;
 	for(u8 i = 0; i < 2; i++) {
-		ServerConnection* connection = &server->connections[i];
+		ServerSlot* connection = &server->connections[i];
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			connection->inputs[j].frame = -1;
 			connection->inputs[j].input = {};
@@ -74,14 +74,21 @@ void server_reset_game(Server* server)
 	world_init(&server->world);
 }
 
-Server* server_init(Arena* arena)
+Server* server_init(Arena* arena, bool accept_remote_connections)
 {
 	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
-	server->socket = platform_init_server_socket(arena);
+
+	if(accept_remote_connections) {
+		server->socket = platform_init_server_socket(arena);
+	} else {
+		server->socket = nullptr;
+	}
+
 	for(u8 i = 0; i < 2; i++) {
-		ServerConnection* connection = &server->connections[i];
+		ServerSlot* connection = &server->connections[i];
 		connection->state = SERVER_CONNECTION_OPEN;
 	}
+
 	server_reset_game(server);
 	return server;
 }
@@ -97,7 +104,7 @@ void server_handle_connection_request(Server* server, i8 connection_id)
 		printf("Server: A client requested a connection (%u), but the game is full.\n", connection_id);
 	}
 
-	ServerConnection* client = &server->connections[connection_id];
+	ServerSlot* client = &server->connections[connection_id];
 	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
 	if(client->state == SERVER_CONNECTION_OPEN) {
 		client->state = SERVER_CONNECTION_PENDING;
@@ -120,7 +127,7 @@ void server_handle_client_ready(Server* server, i8 connection_id)
 {
 	assert(connection_id <= 1);
 
-	ServerConnection* client = &server->connections[connection_id];
+	ServerSlot* client = &server->connections[connection_id];
 	if(client->state == SERVER_CONNECTION_PENDING) {
 		client->state = SERVER_CONNECTION_ACTIVE;
 		printf("Received client acknowledgement, setting client connected: %d\n", connection_id);
@@ -132,12 +139,11 @@ void server_handle_client_ready(Server* server, i8 connection_id)
 // Stores newly recieved input in the relevant client's input buffer. These
 // buffered inputs are pulled from once every frame in the server active update
 // function.
-void server_handle_client_input(Server* server, i8 connection_id, ClientInputMessage* client_input)
+void server_handle_client_input_message(Server* server, i8 connection_id, ClientInputMessage* client_input)
 {
-	ServerConnection* client = &server->connections[connection_id];
+	ServerSlot* client = &server->connections[connection_id];
 
 	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
-	//printf("Server: Frame delta: %i for client %i.\n", frame_delta, connection_id);
 	for(i32 i = 0; i <= frame_delta; i++) {
 		i32 input_frame = client_input->latest_frame - frame_delta + i;
 		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
@@ -145,19 +151,32 @@ void server_handle_client_input(Server* server, i8 connection_id, ClientInputMes
 			continue;
 		}
 
-		buffer_input->frame = input_frame;
-
+		ClientInput event_input;
+		event_input.frame = input_frame;
 		if(client_input->input_moves_up[i]) {
-			buffer_input->input.move_up = 1.0f;
+			event_input.input.move_up = 1.0f;
 		} else {
-			buffer_input->input.move_up = 0.0f;
+			event_input.input.move_up = 0.0f;
 		}
 		if(client_input->input_moves_down[i]) {
-			buffer_input->input.move_down = 1.0f;
+			event_input.input.move_down = 1.0f;
 		} else {
-			buffer_input->input.move_down = 0.0f;
+			event_input.input.move_down = 0.0f;
 		}
+
+		server_push_event(server, (ServerEvent){ 
+			.type = SERVER_EVENT_CLIENT_INPUT, 
+			.client_id = connection_id,
+			.client_input = event_input
+		});
 	}
+}
+
+void server_handle_client_input(Server* server, i8 connection_id, ClientInput* client_input) 
+{
+	ServerSlot* client = &server->connections[connection_id];
+	ClientInput* buffer_input = &client->inputs[client_input->frame % INPUT_BUFFER_SIZE];
+	*buffer_input = *client_input;
 }
 
 void server_receive_messages(Server* server)
@@ -177,11 +196,7 @@ void server_receive_messages(Server* server)
 				server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CLIENT_READY_TO_START, .client_id = packet->connection_id });
 				break;
 			case CLIENT_MESSAGE_INPUT:
-				server_push_event(server, (ServerEvent){ 
-					.type = SERVER_EVENT_CLIENT_INPUT, 
-					.client_id = packet->connection_id,
-					.client_input = *(ClientInputMessage*)packet->data
-				});
+				server_handle_client_input_message(server, packet->connection_id, (ClientInputMessage*)packet->data);
 				break;
 			default: break;
 		}
@@ -199,7 +214,7 @@ void server_update_idle(Server* server, f32 dt)
 {
 	server->frame = 0;
 	for(i32 i = 0; i < 2; i++) {
-		ServerConnection* client = &server->connections[i];
+		ServerSlot* client = &server->connections[i];
 		if(client->state != SERVER_CONNECTION_ACTIVE) {
 			continue;
 		}
@@ -220,7 +235,7 @@ void server_update_idle(Server* server, f32 dt)
 void server_update_active(Server* server, f32 delta_time)
 {
 	for(u8 i = 0; i < 2; i++) {
-		ServerConnection* client = &server->connections[i];
+		ServerSlot* client = &server->connections[i];
 
 		i32 latest_frame_received = -1;
 		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -352,7 +367,9 @@ void server_process_events(Server* server)
 
 void server_update(Server* server, f32 delta_time)
 {
-	server_receive_messages(server);
+	if(server->socket != nullptr) {
+		server_receive_messages(server);
+	}
 	server_process_events(server);
 
 #if NETWORK_SIM_MODE

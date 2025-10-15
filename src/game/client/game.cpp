@@ -66,9 +66,24 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	game->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
 	game->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
-	game->local_server = false;
-	game->client = client_init(arena, ip_string);
+	game->client = nullptr;
 	game->server = nullptr;
+
+	switch(CONFIG_SETTING) {
+		case CONFIG_REMOTE:
+			game->local_server = false;
+			game->client = client_init(arena, ip_string);
+			break;
+		case CONFIG_FULL_LOCAL:
+			game->local_server = true;
+			game->server = server_init(arena, false);
+			break;
+		case CONFIG_HALF_LOCAL:
+			game->local_server = true;
+			game->server = server_init(arena, true);
+			break;
+		default: break;
+	}
 
 	return game;
 }
@@ -131,7 +146,7 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Platfo
 void render_active_state(Game* game, RenderState* render_state, Platform* platform)
 {
 	if(game->local_server) {
-		// NOW: Local sever logic.
+		// NOW: Local server logic.
 	} else { // Server is remote
 		Client* client = game->client;
 
