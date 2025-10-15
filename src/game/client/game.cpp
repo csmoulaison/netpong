@@ -1,7 +1,5 @@
 // NOW: < THIS: We are on the path to allowing locally hosted servers and fully
 // local play. Here's the steps:
-// - Remove rendering logic from the client. Maybe some other stuff too, we'll
-// figure it out.
 // - Allow for the game to allocate a local server instead of client. The client
 // won't be used at all in the case of a local server.
 // - To start with, try the fully local case, with the inputs being passed into
@@ -52,6 +50,9 @@ struct Game {
 	bool local_server;
 	Client* client;
 	Server* server;
+
+	f32 visual_ball_position[2];
+	f32 visual_paddle_positions[2];
 };
 
 Game* game_init(Platform* platform, Arena* arena, char* ip_string) 
@@ -66,7 +67,7 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	game->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
 	game->local_server = false;
-	game->client = client_init(platform, arena, ip_string);
+	game->client = client_init(arena, ip_string);
 	game->server = nullptr;
 
 	return game;
@@ -127,31 +128,34 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Platfo
 	}
 }
 
-// NOW: Remove reference to client and figure out how we want it factored out.
-void render_state_from_world(Game* game, RenderState* render_state, Platform* platform)
+void render_active_state(Game* game, RenderState* render_state, Platform* platform)
 {
-	Client* client = game->client;
+	if(game->local_server) {
+		// NOW: Local sever logic.
+	} else { // Server is remote
+		Client* client = game->client;
 
-	World* world = &client_state_from_frame(client, client->frame - 1)->world;
-	render_visual_lerp(&client->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
-	render_visual_lerp(&client->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
+		World* world = &client_state_from_frame(client, client->frame - 1)->world;
+		render_visual_lerp(&game->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
+		render_visual_lerp(&game->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
 
-	i8 other_id = client_get_other_id(client);
-	render_visual_lerp(&client->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
-	client->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
+		i8 other_id = client_get_other_id(client);
+		render_visual_lerp(&game->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
+		game->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
+	}
 
 	// Render
 	for(u8 i = 0; i < 2; i++) {
 		Rect paddle;
 		paddle.x = -PADDLE_X + i * PADDLE_X * 2.0f;
-		paddle.y = client->visual_paddle_positions[i];
+		paddle.y = game->visual_paddle_positions[i];
 		paddle.w = PADDLE_WIDTH;
 		paddle.h = PADDLE_HEIGHT;
 		render_rect(render_state, paddle, platform);
 	}
 	Rect ball;
-	ball.x = client->visual_ball_position[0];
-	ball.y = client->visual_ball_position[1];
+	ball.x = game->visual_ball_position[0];
+	ball.y = game->visual_ball_position[1];
 	ball.w = BALL_WIDTH;
 	ball.h = BALL_WIDTH;
 	render_rect(render_state, ball, platform);
@@ -162,7 +166,7 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 	if(game->local_server) {
 		// NOW: Local server logic.
 		Server* server = game->server;
-	} else {
+	} else { // Server is remote.
 		Client* client = game->client;
 		if(platform_button_down(platform, game->button_move_up)) {
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_UP;
@@ -172,7 +176,7 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 			client->events_len++;
 		}
-		client_update(client, platform, render_state);
+		client_update(client);
 
 		switch(client->connection_state) {
 			case CLIENT_STATE_REQUESTING_CONNECTION:
@@ -182,7 +186,7 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 				render_waiting_to_start_state(game, render_state, platform);
 				break;
 			case CLIENT_STATE_ACTIVE:
-				render_state_from_world(game, render_state, platform);
+				render_active_state(game, render_state, platform);
 				break;
 			default: break;
 		}

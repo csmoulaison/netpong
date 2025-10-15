@@ -54,9 +54,6 @@ struct Client {
 	i32 frame;
 
 	double frame_length;
-
-	f32 visual_ball_position[2];
-	f32 visual_paddle_positions[2];
 };
 
 void client_push_event(Client* client, ClientEvent event) {
@@ -91,7 +88,7 @@ void client_reset_game(Client* client)
 	}
 }
 
-Client* client_init(Platform* platform, Arena* arena, char* ip_string)
+Client* client_init(Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
 
@@ -135,7 +132,7 @@ void client_simulate_frame(World* world, Client* client)
 	}
 }
 
-void client_simulate_and_advance_frame(Client* client, Platform* platform)
+void client_simulate_and_advance_frame(Client* client)
 {
 	ClientWorldState* previous_state = client_state_from_frame(client, client->frame - 1);
 	ClientWorldState* current_state = client_state_from_frame(client, client->frame);
@@ -185,7 +182,7 @@ void client_simulate_and_advance_frame(Client* client, Platform* platform)
 }
 
 // Message handling functions
-void client_handle_world_update(Client* client, ClientWorldState* server_state, Platform* platform)
+void client_handle_world_update(Client* client, ClientWorldState* server_state)
 {
 	i32 update_frame = server_state->frame;
 	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
@@ -193,7 +190,7 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 	if(update_state->frame != update_frame) {
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 		while(client->frame < update_frame + 1) {
-			client_simulate_and_advance_frame(client, platform);
+			client_simulate_and_advance_frame(client);
 		}
 
 		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
@@ -244,11 +241,11 @@ void client_handle_accept_connection(Client* client, i32 client_id)
 
 // The server wants us to start the game, so we simulate some advance frames and
 // enter the ACTIVE state.
-void client_handle_start_game(Client* client, Platform* platform)
+void client_handle_start_game(Client* client)
 {
 	client->connection_state = CLIENT_STATE_ACTIVE;
 	for(i8 i = 0; i < 6; i++) {
-		client_simulate_and_advance_frame(client, platform);
+		client_simulate_and_advance_frame(client);
 	}
 
 	printf("Received start game notice from server.\n");
@@ -332,7 +329,7 @@ void client_receive_messages(Client* client)
 	arena_destroy(&packet_arena);
 }
 
-void client_update_requesting_connection(Client* client, Platform* platform, RenderState* render_state)
+void client_update_requesting_connection(Client* client)
 {
 	ClientRequestConnectionMessage request_message;
 	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
@@ -340,7 +337,7 @@ void client_update_requesting_connection(Client* client, Platform* platform, Ren
 
 }
 
-void client_update_waiting_to_start(Client* client, Platform* platform, RenderState* render_state)
+void client_update_waiting_to_start(Client* client)
 {
 	ClientReadyToStartMessage ready_message;
 	ready_message.type = CLIENT_MESSAGE_READY_TO_START;
@@ -348,12 +345,12 @@ void client_update_waiting_to_start(Client* client, Platform* platform, RenderSt
 
 }
 
-void client_update_active(Client* client, Platform* platform, RenderState* render_state)
+void client_update_active(Client* client)
 {
-	client_simulate_and_advance_frame(client, platform);
+	client_simulate_and_advance_frame(client);
 }
 
-void client_process_events(Client* client, Platform* platform)
+void client_process_events(Client* client)
 {
 	client->move_up = false;
 	client->move_down = false;
@@ -367,14 +364,14 @@ void client_process_events(Client* client, Platform* platform)
 				client->move_down = true; 
 				break;
 			case CLIENT_EVENT_WORLD_UPDATE:
-				client_handle_world_update(client, &event->world_update, platform); 
+				client_handle_world_update(client, &event->world_update); 
 				break;
 			case CLIENT_EVENT_CONNECTION_ACCEPTED:
 				client_handle_accept_connection(client, event->assigned_id); 
 				printf("connection accepted\n");
 				break;
 			case CLIENT_EVENT_START_GAME:
-				client_handle_start_game(client, platform); 
+				client_handle_start_game(client); 
 				break;
 			case CLIENT_EVENT_END_GAME:
 				client_handle_end_game(client); 
@@ -394,12 +391,10 @@ void client_process_events(Client* client, Platform* platform)
 	client->events_len = 0;
 }
 
-// NOW: Get rid of platform and render_state here. Rendering should be done by
-// the game layer. It will pull from either the client or world state.
-void client_update(Client* client, Platform* platform, RenderState* render_state) 
+void client_update(Client* client) 
 {
 	client_receive_messages(client);
-	client_process_events(client, platform);
+	client_process_events(client);
 
 #if NETWORK_SIM_MODE
 	// TODO: It is certainly wrong to use client->frame_length for this, and we
@@ -410,13 +405,13 @@ void client_update(Client* client, Platform* platform, RenderState* render_state
 	
 	switch(client->connection_state) {
 		case CLIENT_STATE_REQUESTING_CONNECTION:
-			client_update_requesting_connection(client, platform, render_state);
+			client_update_requesting_connection(client);
 			break;
 		case CLIENT_STATE_WAITING_TO_START:
-			client_update_waiting_to_start(client, platform, render_state);
+			client_update_waiting_to_start(client);
 			break;
 		case CLIENT_STATE_ACTIVE:
-			client_update_active(client, platform, render_state);
+			client_update_active(client);
 			break;
 		default: break;
 	}
