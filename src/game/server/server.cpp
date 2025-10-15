@@ -47,7 +47,7 @@ struct ServerSlot {
 
 struct Server {
 	PlatformSocket* socket;
-	ServerSlot connections[2];
+	ServerSlot slots[2];
 
 	ServerEvent events[MAX_SERVER_EVENTS];
 	u32 events_len;
@@ -65,7 +65,7 @@ void server_reset_game(Server* server)
 {
 	server->frame = 0;
 	for(u8 i = 0; i < 2; i++) {
-		ServerSlot* connection = &server->connections[i];
+		ServerSlot* connection = &server->slots[i];
 		for(u32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
 			connection->inputs[j].frame = -1;
 			connection->inputs[j].input = {};
@@ -85,7 +85,7 @@ Server* server_init(Arena* arena, bool accept_remote_connections)
 	}
 
 	for(u8 i = 0; i < 2; i++) {
-		ServerSlot* connection = &server->connections[i];
+		ServerSlot* connection = &server->slots[i];
 		connection->state = SERVER_CONNECTION_OPEN;
 	}
 
@@ -94,43 +94,43 @@ Server* server_init(Arena* arena, bool accept_remote_connections)
 }
 
 // Responds to incoming network requests to join the game as a client, sending
-// back acceptance packets and setting the relevant connections to the PENDING
+// back acceptance packets and setting the relevant slots to the PENDING
 // state, where we will wait until we receive a counter acknowledgement from the
 // new client.
-void server_handle_connection_request(Server* server, i8 connection_id)
+void server_handle_connection_request(Server* server, i8 slot_id)
 {
-	if(connection_id > 1) {
-		platform_free_connection(server->socket, connection_id);
-		printf("Server: A client requested a connection (%u), but the game is full.\n", connection_id);
+	if(slot_id > 1) {
+		platform_free_connection(server->socket, slot_id);
+		printf("Server: A client requested a connection (%u), but the game is full.\n", slot_id);
 	}
 
-	ServerSlot* client = &server->connections[connection_id];
+	ServerSlot* client = &server->slots[slot_id];
 	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
 	if(client->state == SERVER_CONNECTION_OPEN) {
 		client->state = SERVER_CONNECTION_PENDING;
-		printf("Accepting client join, adding client: %d\n", connection_id);
+		printf("Accepting client join, adding client: %d\n", slot_id);
 	}
 
 	ServerAcceptConnectionMessage accept_message;
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
-	accept_message.client_id = connection_id;
-	platform_send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
+	accept_message.client_id = slot_id;
+	platform_send_packet(server->socket, slot_id, (void*)&accept_message, sizeof(accept_message));
 
 }
 
 // Sets clients to the ACTIVE state in response to join acknowledgement packets,
 // which are sent to us in response to acceptance packets we sent when handling
 // connection requests.
-// Once both connections are in the ACTIVE state, the server update function
+// Once both slots are in the ACTIVE state, the server update function
 // will use the active game codepath.
-void server_handle_client_ready(Server* server, i8 connection_id)
+void server_handle_client_ready(Server* server, i8 slot_id)
 {
-	assert(connection_id <= 1);
+	assert(slot_id <= 1);
 
-	ServerSlot* client = &server->connections[connection_id];
+	ServerSlot* client = &server->slots[slot_id];
 	if(client->state == SERVER_CONNECTION_PENDING) {
 		client->state = SERVER_CONNECTION_ACTIVE;
-		printf("Received client acknowledgement, setting client connected: %d\n", connection_id);
+		printf("Received client acknowledgement, setting client connected: %d\n", slot_id);
 	}
 
 	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
@@ -139,9 +139,9 @@ void server_handle_client_ready(Server* server, i8 connection_id)
 // Stores newly recieved input in the relevant client's input buffer. These
 // buffered inputs are pulled from once every frame in the server active update
 // function.
-void server_handle_client_input_message(Server* server, i8 connection_id, ClientInputMessage* client_input)
+void server_handle_client_input_message(Server* server, i8 slot_id, ClientInputMessage* client_input)
 {
-	ServerSlot* client = &server->connections[connection_id];
+	ServerSlot* client = &server->slots[slot_id];
 
 	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
 	for(i32 i = 0; i <= frame_delta; i++) {
@@ -166,15 +166,15 @@ void server_handle_client_input_message(Server* server, i8 connection_id, Client
 
 		server_push_event(server, (ServerEvent){ 
 			.type = SERVER_EVENT_CLIENT_INPUT, 
-			.client_id = connection_id,
+			.client_id = slot_id,
 			.client_input = event_input
 		});
 	}
 }
 
-void server_handle_client_input(Server* server, i8 connection_id, ClientInput* client_input) 
+void server_handle_client_input(Server* server, i8 slot_id, ClientInput* client_input) 
 {
-	ServerSlot* client = &server->connections[connection_id];
+	ServerSlot* client = &server->slots[slot_id];
 	ClientInput* buffer_input = &client->inputs[client_input->frame % INPUT_BUFFER_SIZE];
 	*buffer_input = *client_input;
 }
@@ -205,16 +205,11 @@ void server_receive_messages(Server* server)
 	arena_destroy(&packet_arena);
 }
 
-// TODO: In general, it's probably best to process packets and then handle them
-// here. More centralized and decoupled from the network flow.
-//
-// It's the event queue from Quake, let's be honest, let's not mince words,
-// let's not break balls.
 void server_update_idle(Server* server, f32 dt)
 {
 	server->frame = 0;
 	for(i32 i = 0; i < 2; i++) {
-		ServerSlot* client = &server->connections[i];
+		ServerSlot* client = &server->slots[i];
 		if(client->state != SERVER_CONNECTION_ACTIVE) {
 			continue;
 		}
@@ -235,7 +230,7 @@ void server_update_idle(Server* server, f32 dt)
 void server_update_active(Server* server, f32 delta_time)
 {
 	for(u8 i = 0; i < 2; i++) {
-		ServerSlot* client = &server->connections[i];
+		ServerSlot* client = &server->slots[i];
 
 		i32 latest_frame_received = -1;
 		for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -295,7 +290,7 @@ void server_update_active(Server* server, f32 delta_time)
 			platform_send_packet(server->socket, i, &disconnect_message, sizeof(disconnect_message));
 
 			platform_free_connection(server->socket, i);
-			server->connections[i].state = SERVER_CONNECTION_OPEN;
+			server->slots[i].state = SERVER_CONNECTION_OPEN;
 			printf("Freed connection %u.\n", i);
 
 			i32 other_id = 0;
@@ -376,8 +371,8 @@ void server_update(Server* server, f32 delta_time)
 	platform_update_sim_mode(server->socket, delta_time);
 #endif
 
-	if(server->connections[0].state == SERVER_CONNECTION_ACTIVE 
-	&& server->connections[1].state == SERVER_CONNECTION_ACTIVE) {
+	if(server->slots[0].state == SERVER_CONNECTION_ACTIVE 
+	&& server->slots[1].state == SERVER_CONNECTION_ACTIVE) {
 		server_update_active(server, delta_time);
 	} else {
 		server_update_idle(server, delta_time);
