@@ -91,12 +91,12 @@ void client_reset_game(Client* client)
 Client* client_init(Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
+	client->socket = platform_init_client_socket(arena, ip_string);
 
 	client->events_len = 0;
 	client->move_up = false;
 	client->move_down = false;
 
-	client->socket = platform_init_client_socket(arena, ip_string);
 	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
 	client->id = -1;
 
@@ -193,7 +193,7 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state)
 			client_simulate_and_advance_frame(client);
 		}
 
-		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
+		//printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
 	}
 
 	World* client_world = &update_state->world;
@@ -278,57 +278,6 @@ void client_handle_slow_down(Client* client)
 	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 }
 
-void client_receive_messages(Client* client)
-{
-	// The client only ever receives messages from a remote server.
-
-	// TODO: Allocate arena from existing arena.
-	Arena packet_arena = arena_create(16000);
-	PlatformPacket* packet = platform_receive_packets(client->socket,&packet_arena);
-	while(packet != nullptr) {
-		void* data = packet->data;
-		u8 type = *(u8*)packet->data;
-
-		// Variables used in the switch statement.
-		ClientWorldState update_state;
-
-		switch(type) {
-			case SERVER_MESSAGE_WORLD_UPDATE:
-				update_state.world = ((ServerWorldUpdateMessage*)data)->world;
-				update_state.frame = ((ServerWorldUpdateMessage*)data)->frame;
-				client_push_event(client, (ClientEvent){ 
-					.type = CLIENT_EVENT_WORLD_UPDATE, 
-					.world_update = update_state 
-				}); 
-				break;
-			case SERVER_MESSAGE_ACCEPT_CONNECTION:
-				client_push_event(client, (ClientEvent){ 
-					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
-					.assigned_id = ((ServerAcceptConnectionMessage*)data)->client_id 
-				});
-				break;
-			case SERVER_MESSAGE_START_GAME:
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_START_GAME }); 
-				break;
-			case SERVER_MESSAGE_END_GAME:
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
-				break;
-			case SERVER_MESSAGE_DISCONNECT:
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_DISCONNECT }); 
-				break;
-			case SERVER_MESSAGE_SPEED_UP:
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SPEED_UP }); 
-				break;
-			case SERVER_MESSAGE_SLOW_DOWN:
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SLOW_DOWN }); 
-				break;
-			default: break;
-		}
-		packet = packet->next;
-	}
-	arena_destroy(&packet_arena);
-}
-
 void client_update_requesting_connection(Client* client)
 {
 	ClientRequestConnectionMessage request_message;
@@ -350,6 +299,63 @@ void client_update_active(Client* client)
 	client_simulate_and_advance_frame(client);
 }
 
+void client_process_packets(Client* client)
+{
+	// TODO: Allocate arena from existing arena.
+	Arena packet_arena = arena_create(16000);
+	PlatformPacket* packet = platform_receive_packets(client->socket, &packet_arena);
+
+	while(packet != nullptr) {
+		u8 type = *(u8*)packet->data;
+		void* data = packet->data;
+
+		// Variables used in the switch statement.
+		ClientWorldState update_state;
+
+		switch(type) {
+			case SERVER_MESSAGE_WORLD_UPDATE:
+				assert(client != nullptr);
+				update_state.world = ((ServerWorldUpdateMessage*)data)->world;
+				update_state.frame = ((ServerWorldUpdateMessage*)data)->frame;
+				client_push_event(client, (ClientEvent){ 
+					.type = CLIENT_EVENT_WORLD_UPDATE, 
+					.world_update = update_state 
+				}); 
+				break;
+			case SERVER_MESSAGE_ACCEPT_CONNECTION:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ 
+					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
+					.assigned_id = ((ServerAcceptConnectionMessage*)data)->client_id 
+				});
+				break;
+			case SERVER_MESSAGE_START_GAME:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_START_GAME }); 
+				break;
+			case SERVER_MESSAGE_END_GAME:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
+				break;
+			case SERVER_MESSAGE_DISCONNECT:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_DISCONNECT }); 
+				break;
+			case SERVER_MESSAGE_SPEED_UP:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SPEED_UP }); 
+				break;
+			case SERVER_MESSAGE_SLOW_DOWN:
+				assert(client != nullptr);
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SLOW_DOWN }); 
+				break;
+			default: break;
+		}
+		packet = packet->next;
+	}
+	arena_destroy(&packet_arena);
+}
+
 void client_process_events(Client* client)
 {
 	client->move_up = false;
@@ -368,7 +374,6 @@ void client_process_events(Client* client)
 				break;
 			case CLIENT_EVENT_CONNECTION_ACCEPTED:
 				client_handle_accept_connection(client, event->assigned_id); 
-				printf("connection accepted\n");
 				break;
 			case CLIENT_EVENT_START_GAME:
 				client_handle_start_game(client); 
@@ -393,7 +398,7 @@ void client_process_events(Client* client)
 
 void client_update(Client* client) 
 {
-	client_receive_messages(client);
+	client_process_packets(client);
 	client_process_events(client);
 
 #if NETWORK_SIM_MODE

@@ -1,4 +1,4 @@
-// NOW: Determines the type of client server setup we have. Temporary until we
+// TODO: Determines the type of client server setup we have. Temporary until we
 // allow the user to switch between them at runtime.
 #define CONFIG_REMOTE 0
 #define CONFIG_FULL_LOCAL 1

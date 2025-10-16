@@ -90,6 +90,10 @@ PlatformSocket* platform_init_client_socket(Arena* arena, char* ip_string)
 		}
 	}
 
+#if NETWORK_SIM_MODE == true
+	platform_socket->sim_packets_len = 0;
+#endif
+
 	return platform_socket;
 }
 
@@ -128,6 +132,7 @@ void platform_free_connection(PlatformSocket* socket, i32 connection_id)
 	}
 	sock->connections_len--;
 	sock->id_to_connection[connection_id] = -1;
+	printf("Freed connection. Connections len: %i\n", sock->connections_len);
 }
 
 // This exists so that we can reuse it's logic in NETWORK_SIM_MODE.
@@ -187,10 +192,15 @@ void platform_send_packet(PlatformSocket* socket, i32 connection_id, void* packe
 PlatformPacket* platform_receive_packets(PlatformSocket* socket, Arena* arena) {
 	XlibSocket* sock = (XlibSocket*)socket->backend;
 
+	//printf("Receive packets (connections len: %u)\n", sock->connections_len);
+
 	PlatformPacket* head = nullptr;
 	PlatformPacket** current_node = &head;
 
+	i32 count = 0;
 	while(true) {
+		count++;
+
 		struct sockaddr_in sender_address;
 		socklen_t len = sizeof(struct sockaddr_in);
 

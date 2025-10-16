@@ -1,4 +1,4 @@
-// NOW: < THIS: We are on the path to allowing locally hosted servers and fully
+// NOW: < LIST: We are on the path to allowing locally hosted servers and fully
 // local play. Here's the steps:
 // - Allow for the game to allocate a local server instead of client. The client
 // won't be used at all in the case of a local server.
@@ -47,12 +47,13 @@ struct Game {
 	ButtonHandle button_move_down;
 	ButtonHandle button_quit;
 
+	f32 visual_ball_position[2];
+	f32 visual_paddle_positions[2];
+
 	bool local_server;
 	Client* client;
 	Server* server;
 
-	f32 visual_ball_position[2];
-	f32 visual_paddle_positions[2];
 };
 
 Game* game_init(Platform* platform, Arena* arena, char* ip_string) 

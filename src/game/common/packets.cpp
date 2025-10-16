@@ -4,34 +4,10 @@
 // further if that seems necessary.
 
 // Client packets
-enum ClientPacketType {
+enum PacketType {
 	CLIENT_PACKET_REQUEST_CONNECTION,
 	CLIENT_PACKET_READY_TO_START,
-	CLIENT_PACKET_INPUT
-};
-
-struct ClientPacketHeader {
-	ClientPacketType type;
-};
-
-struct ClientRequestConnectionPacket {
-	ClientPacketHeader header;
-};
-
-struct ClientReadyToStartPacket {
-	ClientPacketHeader header;
-};
-
-struct ClientInputPacket {
-	ClientPacketHeader header;
-	i32 latest_frame;
-	i32 oldest_frame;
-	bool input_moves_up[INPUT_WINDOW_FRAMES];
-	bool input_moves_down[INPUT_WINDOW_FRAMES];
-};
-
-// Server packets
-enum ServerPacketType {
+	CLIENT_PACKET_INPUT,
 	SERVER_PACKET_ACCEPT_CONNECTION,
 	SERVER_PACKET_START_GAME,
 	SERVER_PACKET_END_GAME,
@@ -41,29 +17,45 @@ enum ServerPacketType {
 	SERVER_PACKET_SLOW_DOWN
 };
 
-struct ServerPacketHeader {
-	ServerPacketType type;
+struct ClientRequestConnectionPacket {
+	PacketType type;
+};
+
+struct ClientReadyToStartPacket {
+	PacketType type;
+};
+
+struct ClientInputPacket {
+	PacketType type;
+	i32 latest_frame;
+	i32 oldest_frame;
+	bool input_moves_up[INPUT_WINDOW_FRAMES];
+	bool input_moves_down[INPUT_WINDOW_FRAMES];
+};
+
+// Server packets
+enum PacketType {
 };
 
 struct ServerAcceptConnectionPacket {
-	ServerPacketHeader header;
+	PacketType type;
 	u8 client_id;
 };
 
 struct ServerStartGamePacket {
-	ServerPacketHeader header;
+	PacketType type;
 };
 
 struct ServerEndGamePacket {
-	ServerPacketHeader header;
+	PacketType type;
 };
 
 struct ServerDisconnectPacket {
-	ServerPacketHeader header;
+	PacketType type;
 };
 
 struct ServerWorldUpdatePacket {
-	ServerPacketHeader header;
+	PacketType type;
 	World world;
 	i32 frame;
 };
@@ -71,9 +63,9 @@ struct ServerWorldUpdatePacket {
 // TODO: Add frame to these so the client can tell whether they have already
 // responded to a more recent speed update packet.
 struct ServerSpeedUpPacket {
-	ServerPacketHeader header;
+	PacketType type;
 };
 
 struct ServerSlowDownPacket {
-	ServerPacketHeader header;
+	PacketType type;
 };
