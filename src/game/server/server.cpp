@@ -250,26 +250,13 @@ void server_update_idle(Server* server, f32 dt)
 	}
 }
 
-// NOW: This still needs adapting to the remote/non remote server split model,
-// and it's in progress, unlike other bits of the code.
 void server_update_active(Server* server, f32 delta_time)
 {
-	//printf("Server: ACTIVE\n");
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 
 		i32 effective_input_frame = server->frame;
 
-		// NOW: The following bit of code seems to be performing the following:
-		// - Determining whether a remote client should be speed modulated based on
-		// the current frame delta.
-		// - Pulling input from the client input queues and putting them into the
-		// upcoming simulation frame.
-		// - Timing out clients who we haven't received input from in a while.
-		// 
-		// ADAPTING it will probably involve the following:
-		// - REMOTE ONLY: Speed modulation, determing/pulling latest input, timeouts.
-		// - LOCAL: Assert that the current frame has input and push onto world.
 		if(client->type == SERVER_PLAYER_REMOTE) {
 			i32 latest_frame_received = -1;
 			for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -316,7 +303,7 @@ void server_update_active(Server* server, f32 delta_time)
 				}
 			}
 			if(effective_input_frame != server->frame) {
-				//printf("Server: Missed a packet from client %u.\n", i);
+				printf("Server: Missed a packet from client %u.\n", i);
 			}
 
 			// Client timeout. We haven't received any inputs from the client for

@@ -1,17 +1,15 @@
 // NOW: < LIST: We are on the path to allowing locally hosted servers and fully
 // local play. Here's the steps:
-// - Allow for the game to allocate a local server instead of client. The client
-// won't be used at all in the case of a local server.
-//      - To start with, try the fully local case, with the inputs being passed into
-//      the server directly as an event, the server authoritatively simulating the
-//      world state, and the game layer rendering the results in both the local and
-//      remote case.
-//      - Make whatever changes are needed to support the local server and 1 remote
-//      client case.
+// - We have a server able to be hosted locally and the ability to play with 1
+// remote client.
+// - Finish it up by allowing for the fully local case, with no network stuff
+// at all.
 // - Make a dead simple bot which sends input messages to the server like a
 // client.
 // - Assess whether the way events are being handled is sensical or if anything
 // needs to be more systemetized.
+// - Definitely think about how things might be factored around better. Might be
+// worth doing this as we do the next steps.
 //
 // AFTERWARDS, the following are on the agenda:
 // - Restructure the platform layer, turning it into a series of namespaced
@@ -210,7 +208,9 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 			if(server->slots[i].type == SERVER_PLAYER_LOCAL) {
 				ClientInput event_input = {};
 				event_input.frame = server->frame;
-				// NOW: Support for two local players.
+
+				// NOW: Support for two local players. Will need new buttons and to
+				// associate them with either client.
 				if(platform_button_down(platform, game->button_move_up)) {
 					event_input.input.move_up = 1.0f;
 				}
