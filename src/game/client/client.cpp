@@ -184,6 +184,14 @@ void client_simulate_and_advance_frame(Client* client)
 // Message handling functions
 void client_handle_world_update(Client* client, ClientWorldState* server_state)
 {
+	if(client->connection_state != CLIENT_STATE_ACTIVE) {
+		client->connection_state = CLIENT_STATE_ACTIVE;
+		for(i8 i = 0; i < 6; i++) {
+			client_simulate_and_advance_frame(client);
+		}
+		printf("Client: Received first world update from server. Starting simulation.\n");
+	}
+
 	i32 update_frame = server_state->frame;
 	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
 
@@ -191,9 +199,9 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state)
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 		while(client->frame < update_frame + 1) {
 			client_simulate_and_advance_frame(client);
+			//printf("Client: Behind server (%i-%i), simulating catch up frame.\n", update_frame, client->frame);
 		}
-
-		//printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
+		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
 	}
 
 	World* client_world = &update_state->world;
@@ -235,20 +243,8 @@ void client_handle_accept_connection(Client* client, i32 client_id)
 		client->id = client_id;
 		client->connection_state = CLIENT_STATE_WAITING_TO_START;
 
-		printf("Recieved connection acceptance from server.\n");
+		printf("Client: Recieved connection acceptance from server.\n");
 	}
-}
-
-// The server wants us to start the game, so we simulate some advance frames and
-// enter the ACTIVE state.
-void client_handle_start_game(Client* client)
-{
-	client->connection_state = CLIENT_STATE_ACTIVE;
-	for(i8 i = 0; i < 6; i++) {
-		client_simulate_and_advance_frame(client);
-	}
-
-	printf("Received start game notice from server.\n");
 }
 
 void client_handle_end_game(Client* client)
@@ -283,7 +279,6 @@ void client_update_requesting_connection(Client* client)
 	ClientRequestConnectionMessage request_message;
 	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
 	platform_send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
-
 }
 
 void client_update_waiting_to_start(Client* client)
@@ -329,10 +324,6 @@ void client_process_packets(Client* client)
 					.assigned_id = ((ServerAcceptConnectionMessage*)data)->client_id 
 				});
 				break;
-			case SERVER_MESSAGE_START_GAME:
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_START_GAME }); 
-				break;
 			case SERVER_MESSAGE_END_GAME:
 				assert(client != nullptr);
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
@@ -374,9 +365,6 @@ void client_process_events(Client* client)
 				break;
 			case CLIENT_EVENT_CONNECTION_ACCEPTED:
 				client_handle_accept_connection(client, event->assigned_id); 
-				break;
-			case CLIENT_EVENT_START_GAME:
-				client_handle_start_game(client); 
 				break;
 			case CLIENT_EVENT_END_GAME:
 				client_handle_end_game(client); 

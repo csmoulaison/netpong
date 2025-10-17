@@ -73,8 +73,8 @@ void world_simulate(World* world, f32 dt)
 		world->ball_position[i] += world->ball_velocity[i] * dt;
 	}
 
-	f32 ball_left = world->ball_position[0] - BALL_WIDTH;
-	f32 ball_right = world->ball_position[0] + BALL_WIDTH;
+	f32 ball_left = world->ball_position[0] - BALL_HALF_WIDTH;
+	f32 ball_right = world->ball_position[0] + BALL_HALF_WIDTH;
 	f32 ball_bottom = world->ball_position[1] - BALL_WIDTH;
 	f32 ball_top = world->ball_position[1] + BALL_WIDTH;
 

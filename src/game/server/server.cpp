@@ -41,6 +41,8 @@ enum ServerSlotState {
 	SERVER_SLOT_ACTIVE
 };
 
+// TODO: If we are making something with a larger number of players,
+// differentiate types by array rather than with an enum.
 enum ServerPlayerType {
 	SERVER_PLAYER_LOCAL,
 	SERVER_PLAYER_REMOTE,
@@ -52,6 +54,7 @@ struct ServerSlot {
 	ServerPlayerType type;
 	ClientInput inputs[INPUT_BUFFER_SIZE];
 	f32 ready_timeout_countdown;
+	i32 connection_id;
 };
 
 struct Server {
@@ -110,6 +113,7 @@ void server_add_local_player(Server* server)
 		if(client->state == SERVER_SLOT_OPEN) {
 			client->state = SERVER_SLOT_ACTIVE;
 			client->type = SERVER_PLAYER_LOCAL;
+			break;
 		}
 	}
 }
@@ -124,7 +128,7 @@ void server_handle_connection_request(Server* server, i32 connection_id)
 	i32 client_id;
 
 	if(connection_id > 1) {
-		printf("Rejecting connection because the connection_id is > 1.\n");
+		printf("Server: Rejecting connection because the connection_id is > 1.\n");
 		goto reject_connection_request;
 	}
 
@@ -142,7 +146,7 @@ void server_handle_connection_request(Server* server, i32 connection_id)
 	}
 
 	if(client_id == -1) {
-		printf("Rejecting connection because there are no open slots.\n");
+		printf("Server: Rejecting connection because there are no open slots.\n");
 		goto reject_connection_request;
 	}
 
@@ -150,8 +154,9 @@ void server_handle_connection_request(Server* server, i32 connection_id)
 	client->state = SERVER_SLOT_PENDING;
 	client->type = SERVER_PLAYER_REMOTE;
 	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
+	client->connection_id = connection_id;
 	server->connection_to_client_ids[connection_id] = client_id;
-	printf("Accepting client join, adding client: %d\n", client_id);
+	printf("Server: Accepting client join, adding client: %d\n", client_id);
 
 	ServerAcceptConnectionMessage accept_message;
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
@@ -174,7 +179,7 @@ void server_handle_client_ready(Server* server, i32 client_id)
 	ServerSlot* client = &server->slots[client_id];
 	if(client->state == SERVER_SLOT_PENDING) {
 		client->state = SERVER_SLOT_ACTIVE;
-		printf("Received client acknowledgement, setting client connected: %d\n", client_id);
+		printf("Server: Received client acknowledgement, setting client connected: %d\n", client_id);
 	}
 	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
 }
@@ -185,7 +190,6 @@ void server_handle_client_ready(Server* server, i32 client_id)
 void server_handle_client_input_message(Server* server, i32 client_id, ClientInputMessage* client_input)
 {
 	ServerSlot* client = &server->slots[client_id];
-
 	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
 	for(i32 i = 0; i <= frame_delta; i++) {
 		i32 input_frame = client_input->latest_frame - frame_delta + i;
@@ -236,11 +240,11 @@ void server_update_idle(Server* server, f32 dt)
 			if(client->ready_timeout_countdown <= 0.0f) {
 				ServerDisconnectMessage disconnect_message;
 				disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
-				platform_send_packet(server->socket, i, &disconnect_message, sizeof(disconnect_message));
+				platform_send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
 
-				platform_free_connection(server->socket, i);
+				platform_free_connection(server->socket, client->connection_id);
 				client->state = SERVER_SLOT_OPEN;
-				printf("Freed connection %u.\n", i);
+				printf("Server: Freed connection %u due to ready timeout.\n", i);
 			}
 		}
 	}
@@ -248,13 +252,24 @@ void server_update_idle(Server* server, f32 dt)
 
 // NOW: This still needs adapting to the remote/non remote server split model,
 // and it's in progress, unlike other bits of the code.
-// 
-// Could maybe be causing the segfault?
 void server_update_active(Server* server, f32 delta_time)
 {
+	//printf("Server: ACTIVE\n");
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 
+		i32 effective_input_frame = server->frame;
+
+		// NOW: The following bit of code seems to be performing the following:
+		// - Determining whether a remote client should be speed modulated based on
+		// the current frame delta.
+		// - Pulling input from the client input queues and putting them into the
+		// upcoming simulation frame.
+		// - Timing out clients who we haven't received input from in a while.
+		// 
+		// ADAPTING it will probably involve the following:
+		// - REMOTE ONLY: Speed modulation, determing/pulling latest input, timeouts.
+		// - LOCAL: Assert that the current frame has input and push onto world.
 		if(client->type == SERVER_PLAYER_REMOTE) {
 			i32 latest_frame_received = -1;
 			for(i32 j = 0; j < INPUT_BUFFER_SIZE; j++) {
@@ -268,8 +283,8 @@ void server_update_active(Server* server, f32 delta_time)
 			if(latest_frame_received == -1) {
 				ServerStartGameMessage start_message;
 				start_message.type = SERVER_MESSAGE_START_GAME;
-				platform_send_packet(server->socket, i, (void*)&start_message, sizeof(start_message));
-				printf("Server: Sent start game packet to client%u.\n", i);
+				platform_send_packet(server->socket, client->connection_id, (void*)&start_message, sizeof(start_message));
+				printf("Server: Sent start game packet to client %u.\n", i);
 				continue;
 			// Client speed up if the server is too far ahead, client slow down if the
 			// server is too far behind.
@@ -278,18 +293,17 @@ void server_update_active(Server* server, f32 delta_time)
 				ServerSpeedUpMessage speed_message;
 				speed_message.type = SERVER_MESSAGE_SPEED_UP;
 				//speed_message.frame = server->frame;
-				platform_send_packet(server->socket, i, &speed_message, sizeof(speed_message));
+				platform_send_packet(server->socket, client->connection_id, &speed_message, sizeof(speed_message));
 			} else if(latest_frame_received - server->frame > 6) {
 				ServerSlowDownMessage slow_message;
 				slow_message.type = SERVER_MESSAGE_SLOW_DOWN;
 				//slow_message.frame = server->frame;
-				platform_send_packet(server->socket, i, &slow_message, sizeof(slow_message));
+				platform_send_packet(server->socket, client->connection_id, &slow_message, sizeof(slow_message));
 			}
 
 			// Optimally, we want to use the client input that coincides with the frame
 			// the server is about to simulate, but if we don't have that frame, we will
 			// use the last received input in the buffer.
-			i32 effective_input_frame = server->frame;
 			if(latest_frame_received < server->frame) {
 				effective_input_frame = latest_frame_received;
 			} else {
@@ -302,49 +316,51 @@ void server_update_active(Server* server, f32 delta_time)
 				}
 			}
 			if(effective_input_frame != server->frame) {
-				printf("Server: Missed a packet from client %u.\n", i);
+				//printf("Server: Missed a packet from client %u.\n", i);
 			}
 
 			// Client timeout. We haven't received any inputs from the client for
 			// INPUT_BUFFER_SIZE frames.
+			// 
 			// TODO: We want to decouple this from the queue size, really. 
 			if(server->frame - effective_input_frame > INPUT_BUFFER_SIZE) {
 				ServerDisconnectMessage disconnect_message;
 				disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
-				platform_send_packet(server->socket, i, &disconnect_message, sizeof(disconnect_message));
+				platform_send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
 
-				platform_free_connection(server->socket, i);
+				platform_free_connection(server->socket, client->connection_id);
 				server->slots[i].state = SERVER_SLOT_OPEN;
-				printf("Freed connection %u.\n", i);
+				printf("Server: Freed connection %u due to input buffer overflow.\n", i);
 
-				i32 other_id = 0;
+				ServerSlot* other_client = &server->slots[0];
 				if(i == 0) {
-					other_id = 1;
+					other_client = &server->slots[1];
 				}
 
-				ServerEndGameMessage end_message;
-				end_message.type = SERVER_MESSAGE_END_GAME;
-				platform_send_packet(server->socket, other_id, &end_message, sizeof(end_message));
-				printf("Sent end game packet to %u.\n", other_id);
+				if(other_client->type == SERVER_PLAYER_REMOTE) {
+					ServerEndGameMessage end_message;
+					end_message.type = SERVER_MESSAGE_END_GAME;
+					platform_send_packet(server->socket, other_client->connection_id, &end_message, sizeof(end_message));
+					printf("Sent end game packet to connection %u due to other player timeout.\n", other_client->connection_id);
+				}
 
 				server_reset_game(server);
 				return;
 			}
-
-			server->world.player_inputs[i] = client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].input;
+		} else { 
+			// Client is local or a bot.
+			assert(client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].frame == server->frame);
 		}
+
+		server->world.player_inputs[i] = client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].input;
 	}
 
 	// Simulate using client inputs.
 	world_simulate(&server->world, delta_time);
-
 	// Reset the game if the ball has exited the play area.
-	// 
-	// TODO: This is game logic, once we decouple this from the server, it will
-	// have to find it's way somewhere else.
 	if(server->world.ball_position[0] < -1.5f
 	|| server->world.ball_position[0] > 1.5f) {
-		// TODO: Should be world_init. Anything wrong with that?
+		// TODO: Should be world_init.
 		server->world.ball_position[0] = 0.0f;
 		server->world.ball_position[1] = 0.0f;
 		server->world.ball_velocity[0] = 0.7f;
@@ -358,10 +374,13 @@ void server_update_active(Server* server, f32 delta_time)
 	update_message.type = SERVER_MESSAGE_WORLD_UPDATE;
 	update_message.frame = server->frame;
 	update_message.world = server->world;
-
 	for(u8 i = 0; i < 2; i++) {
-		platform_send_packet(server->socket, i, &update_message, sizeof(update_message));
+		ServerSlot* client = &server->slots[i];
+		if(client->type == SERVER_PLAYER_REMOTE) {
+			platform_send_packet(server->socket, client->connection_id, &update_message, sizeof(update_message));
+		}
 	}
+
 	server->frame++;
 }
 
@@ -369,12 +388,9 @@ void server_process_packets(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-
-	// NOW: < THIS: Segfault is on this line. It's because the server is rejecting
-	// connections off the bat, and somehow rejects three connections, leading to a
-	// connections_len of -1 on the platform socket side.
-	//      ( reject 0, reject 1, reject 1 )
 	PlatformPacket* packet = platform_receive_packets(server->socket, &packet_arena);
+
+	bool new_connections[2] = { false, false };
 
 	while(packet != nullptr) {
 		u8 type = *(u8*)packet->data;
@@ -389,7 +405,10 @@ void server_process_packets(Server* server)
 			case CLIENT_MESSAGE_REQUEST_CONNECTION:
 				assert(server != nullptr);
 
-				server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CONNECTION_REQUEST, .connection_id = packet->connection_id });
+				if(!new_connections[packet->connection_id]) {
+					new_connections[packet->connection_id] = true;
+					server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CONNECTION_REQUEST, .connection_id = packet->connection_id });
+				}
 				break;
 			case CLIENT_MESSAGE_READY_TO_START:
 				assert(server != nullptr);

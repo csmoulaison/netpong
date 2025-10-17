@@ -2,18 +2,18 @@
 // local play. Here's the steps:
 // - Allow for the game to allocate a local server instead of client. The client
 // won't be used at all in the case of a local server.
-// - To start with, try the fully local case, with the inputs being passed into
-// the server directly as an event, the server authoritatively simulating the
-// world state, and the game layer rendering the results in both the local and
-// remote case.
-// - Make whatever changes are needed to support the local server and 1 remote
-// client case.
+//      - To start with, try the fully local case, with the inputs being passed into
+//      the server directly as an event, the server authoritatively simulating the
+//      world state, and the game layer rendering the results in both the local and
+//      remote case.
+//      - Make whatever changes are needed to support the local server and 1 remote
+//      client case.
 // - Make a dead simple bot which sends input messages to the server like a
 // client.
 // - Assess whether the way events are being handled is sensical or if anything
 // needs to be more systemetized.
 //
-// Afterwards, the following are on the agenda:
+// AFTERWARDS, the following are on the agenda:
 // - Restructure the platform layer, turning it into a series of namespaced
 // engine subsystems which forward declare whatever platform specific stuff they
 // need. The engine part will be the same in every build, and this way we can
@@ -30,7 +30,7 @@
 // - Cleanup. I think it makes sense to save major cleanups for after a lot of
 // this potentially very disruptive work.
 //
-// Whether we want the following before moving to the mech stuff is debatable:
+// WHETHER we want the following before moving to the mech stuff is debatable:
 // - Most majorly, a task system with a thread pool, dependency graph, all that.
 // I think it makes the most sense to do this in another project first before
 // including it with a networked project.
@@ -53,7 +53,6 @@ struct Game {
 	bool local_server;
 	Client* client;
 	Server* server;
-
 };
 
 Game* game_init(Platform* platform, Arena* arena, char* ip_string) 
@@ -70,7 +69,16 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	game->client = nullptr;
 	game->server = nullptr;
 
-	switch(CONFIG_SETTING) {
+	i32 config_setting = CONFIG_REMOTE;
+	if(ip_string != nullptr) {
+		if(strcmp(ip_string, "host") == 0) {
+			config_setting = CONFIG_HALF_LOCAL;
+		} else if(strcmp(ip_string, "local") == 0) {
+			config_setting = CONFIG_FULL_LOCAL;
+		}
+	}
+
+	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
 			game->client = client_init(arena, ip_string);
@@ -82,6 +90,7 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 		case CONFIG_HALF_LOCAL:
 			game->local_server = true;
 			game->server = server_init(arena, true);
+			server_add_local_player(game->server);
 			break;
 		default: break;
 	}
@@ -147,13 +156,28 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Platfo
 void render_active_state(Game* game, RenderState* render_state, Platform* platform)
 {
 	if(game->local_server) {
-		// NOW: Local server logic.
+		Server* server = game->server;
+		World* world = &server->world;
+
+		game->visual_ball_position[0] = world->ball_position[0];
+		game->visual_ball_position[1] = world->ball_position[1];
+
+		for(u8 i = 0; i < 2; i++) {
+			ServerSlot* slot = &server->slots[i];
+			if(slot->type == SERVER_PLAYER_REMOTE) {
+				render_visual_lerp(&game->visual_paddle_positions[i], world->paddle_positions[i], BASE_FRAME_LENGTH);
+			} else {
+				game->visual_paddle_positions[i] = world->paddle_positions[i];
+			}
+		}
 	} else { // Server is remote
 		Client* client = game->client;
-
 		World* world = &client_state_from_frame(client, client->frame - 1)->world;
-		render_visual_lerp(&game->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
-		render_visual_lerp(&game->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
+
+		//render_visual_lerp(&game->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
+		//render_visual_lerp(&game->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
+		game->visual_ball_position[0] = world->ball_position[0];
+		game->visual_ball_position[1] = world->ball_position[1];
 
 		i8 other_id = client_get_other_id(client);
 		render_visual_lerp(&game->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
@@ -180,8 +204,34 @@ void render_active_state(Game* game, RenderState* render_state, Platform* platfo
 void game_update(Game* game, Platform* platform, RenderState* render_state)
 {
 	if(game->local_server) {
-		// NOW: Local server logic.
 		Server* server = game->server;
+
+		for(u8 i = 0; i < 2; i++) {
+			if(server->slots[i].type == SERVER_PLAYER_LOCAL) {
+				ClientInput event_input = {};
+				event_input.frame = server->frame;
+				// NOW: Support for two local players.
+				if(platform_button_down(platform, game->button_move_up)) {
+					event_input.input.move_up = 1.0f;
+				}
+				if(platform_button_down(platform, game->button_move_down)) {
+					event_input.input.move_down = 1.0f;
+				}
+				server_push_event(server, (ServerEvent){ 
+					.type = SERVER_EVENT_CLIENT_INPUT, 
+					.client_id = i,
+					.client_input = event_input
+				});
+			}
+		}
+		server_update(server, BASE_FRAME_LENGTH);
+
+		if(server->slots[0].state == SERVER_SLOT_ACTIVE 
+		&& server->slots[1].state == SERVER_SLOT_ACTIVE) {
+			render_active_state(game, render_state, platform);
+		} else {
+			render_waiting_to_start_state(game, render_state, platform);
+		}
 	} else { // Server is remote.
 		Client* client = game->client;
 		if(platform_button_down(platform, game->button_move_up)) {

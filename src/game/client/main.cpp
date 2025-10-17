@@ -27,17 +27,16 @@ i32 main(i32 argc, char** argv)
 	if(argc > 1) {
 		ip_string = argv[1];
 	}
-	game = game_init(platform, &program_arena, nullptr);
+	game = game_init(platform, &program_arena, ip_string);
 
 	RenderState* previous_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 
 	double time = 0.0f;
-
 	double current_time = platform_time_in_seconds();
 	double time_accumulator = 0.0f;
-
 	bool first_frame = true;
+	double frame_length = BASE_FRAME_LENGTH;
 
 	while(game_close_requested(game) != true) {
 		double new_time = platform_time_in_seconds();
@@ -48,9 +47,13 @@ i32 main(i32 argc, char** argv)
 		current_time = new_time;
 		time_accumulator += frame_time;
 
-		// NOW: game->client->frame_length won't be a given when a client might not
-		// exist or if there are more than one of them.
-		while(time_accumulator >= game->client->frame_length) {
+		while(time_accumulator >= frame_length) {
+			if(game->client != nullptr) {
+				frame_length = game->client->frame_length;
+			} else {
+				frame_length = BASE_FRAME_LENGTH;
+			}
+
 			platform_update(platform, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
@@ -62,11 +65,11 @@ i32 main(i32 argc, char** argv)
 				first_frame = false;
 			}
 
-			time_accumulator -= game->client->frame_length;
-			time += game->client->frame_length;
+			time_accumulator -= frame_length;
+			time += frame_length;
 		}
 
-		double time_alpha = time_accumulator / game->client->frame_length;
+		double time_alpha = time_accumulator / frame_length;
 		RenderState interpolated_render_state = renderer_interpolate_states(previous_render_state, current_render_state, time_alpha);
 
 		// Render based on render states now.
