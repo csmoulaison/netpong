@@ -71,9 +71,12 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 			config_setting = CONFIG_HALF_LOCAL;
 		} else if(strcmp(ip_string, "local") == 0) {
 			config_setting = CONFIG_FULL_LOCAL;
+		} else if(strcmp(ip_string, "fullbot") == 0) {
+			config_setting = CONFIG_FULL_BOT;
+		} else if(strcmp(ip_string, "halfbot") == 0) {
+			config_setting = CONFIG_HALF_BOT;
 		}
 	}
-
 	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
@@ -89,6 +92,18 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 			game->local_server = true;
 			game->server = server_init(arena, true);
 			server_add_local_player(game->server);
+			break;
+		case CONFIG_FULL_BOT:
+			game->local_server = true;
+			game->server = server_init(arena, true);
+			server_add_bot(game->server);
+			server_add_bot(game->server);
+			break;
+		case CONFIG_HALF_BOT:
+			game->local_server = true;
+			game->server = server_init(arena, true);
+			server_add_local_player(game->server);
+			server_add_bot(game->server);
 			break;
 		default: break;
 	}

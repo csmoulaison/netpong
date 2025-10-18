@@ -112,6 +112,8 @@ Server* server_init(Arena* arena, bool accept_client_connections)
 	return server;
 }
 
+// TODO: Probably make these two return success or id, but that's not really
+// useful for our current circumstance.
 void server_add_local_player(Server* server)
 {
 	for(u8 i = 0; i < 2; i++) {
@@ -119,7 +121,19 @@ void server_add_local_player(Server* server)
 		if(client->state == SERVER_SLOT_OPEN) {
 			client->state = SERVER_SLOT_ACTIVE;
 			client->type = SERVER_PLAYER_LOCAL;
-			break;
+			return;
+		}
+	}
+}
+
+void server_add_bot(Server* server)
+{
+	for(u8 i = 0; i < 2; i++) {
+		ServerSlot* client = &server->slots[i];
+		if(client->state == SERVER_SLOT_OPEN) {
+			client->state = SERVER_SLOT_ACTIVE;
+			client->type = SERVER_PLAYER_BOT;
+			return;
 		}
 	}
 }
@@ -341,7 +355,8 @@ void server_update_active(Server* server, f32 delta_time)
 				return;
 			}
 		} else { 
-			// Client is local or a bot.
+			// Client is local or a bot. If the following assertion fires, it means
+			// inputs events were not pushed for this frame.
 			assert(client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].frame == server->frame);
 		}
 
@@ -446,9 +461,36 @@ void server_process_events(Server* server)
 
 void server_update(Server* server, f32 delta_time)
 {
+	// Simulate bots
+	for(u8 i = 0; i < 2; i++) {
+		if(server->slots[i].type == SERVER_PLAYER_BOT) {
+			World* world = &server->world;
+
+			ClientInput event_input = {};
+			event_input.frame = server->frame;
+
+			if((i == 0 && world->ball_velocity[0] < 0.0f && world->ball_position[0] < 0.25f)
+ 			|| (i == 1 && world->ball_velocity[0] > 0.0f && world->ball_position[0] > -0.25f)) {
+				f32 delta_pos = world->paddle_positions[i] - world->ball_position[1];
+				if(delta_pos < -0.05f) {
+					event_input.input.move_up = 1.0f;
+				} else if(delta_pos > 0.05f) {
+					event_input.input.move_down = 1.0f;
+				}
+			}
+
+			server_push_event(server, (ServerEvent){ 
+				.type = SERVER_EVENT_CLIENT_INPUT, 
+				.client_id = i,
+				.client_input = event_input
+			});
+		}
+	}
+
 	if(server->socket != nullptr) {
 		server_process_packets(server);
 	}
+
 	server_process_events(server);
 
 #if NETWORK_SIM_MODE
