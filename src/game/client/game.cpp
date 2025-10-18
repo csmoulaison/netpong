@@ -1,7 +1,5 @@
-// NOW: < LIST: We have a server able to be hosted locally and the ability to play with 1
-// remote client. Next:
-// - Finish it up by allowing for the fully local case, with no network stuff
-// at all.
+// NOW: < LIST: We have a server able to be hosted locally and the ability to
+// play fully locally. Next:
 // - Make a dead simple bot which sends input messages to the server like a
 // client.
 // - Assess whether the way events are being handled is sensical or if anything
@@ -211,14 +209,13 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 				ClientInput event_input = {};
 				event_input.frame = server->frame;
 
-				// NOW: Support for two local players. Will need new buttons and to
-				// associate them with either client.
 				if(platform_button_down(platform, game->move_up_buttons[i])) {
 					event_input.input.move_up = 1.0f;
 				}
 				if(platform_button_down(platform, game->move_down_buttons[i])) {
 					event_input.input.move_down = 1.0f;
 				}
+
 				server_push_event(server, (ServerEvent){ 
 					.type = SERVER_EVENT_CLIENT_INPUT, 
 					.client_id = i,
@@ -228,8 +225,7 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 		}
 		server_update(server, BASE_FRAME_LENGTH);
 
-		if(server->slots[0].state == SERVER_SLOT_ACTIVE 
-		&& server->slots[1].state == SERVER_SLOT_ACTIVE) {
+		if(server_is_active(server)) {
 			render_active_state(game, render_state, platform);
 		} else {
 			render_waiting_to_start_state(game, render_state, platform);

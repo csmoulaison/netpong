@@ -69,7 +69,13 @@ struct Server {
 	World world;
 };
 
-void server_push_event(Server* server, ServerEvent event) {
+bool server_is_active(Server* server) 
+{
+	return server->slots[0].state == SERVER_SLOT_ACTIVE && server->slots[1].state == SERVER_SLOT_ACTIVE;
+}
+
+void server_push_event(Server* server, ServerEvent event) 
+{
 	server->events[server->events_len] = event;
 	server->events_len++;
 }
@@ -449,8 +455,7 @@ void server_update(Server* server, f32 delta_time)
 	platform_update_sim_mode(server->socket, delta_time);
 #endif
 
-	if(server->slots[0].state == SERVER_SLOT_ACTIVE 
-	&& server->slots[1].state == SERVER_SLOT_ACTIVE) {
+	if(server_is_active(server)) {
 		server_update_active(server, delta_time);
 	} else {
 		server_update_idle(server, delta_time);
