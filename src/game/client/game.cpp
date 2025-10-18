@@ -1,7 +1,5 @@
-// NOW: < LIST: We are on the path to allowing locally hosted servers and fully
-// local play. Here's the steps:
-// - We have a server able to be hosted locally and the ability to play with 1
-// remote client.
+// NOW: < LIST: We have a server able to be hosted locally and the ability to play with 1
+// remote client. Next:
 // - Finish it up by allowing for the fully local case, with no network stuff
 // at all.
 // - Make a dead simple bot which sends input messages to the server like a
@@ -41,9 +39,9 @@ struct Game {
 	bool close_requested;
 	u32 frames_since_init;
 
-	ButtonHandle button_move_up;
-	ButtonHandle button_move_down;
-	ButtonHandle button_quit;
+	ButtonHandle move_up_buttons[2];
+	ButtonHandle move_down_buttons[2];
+	ButtonHandle quit_button;
 
 	f32 visual_ball_position[2];
 	f32 visual_paddle_positions[2];
@@ -60,9 +58,11 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	game->close_requested = false;
 	game->frames_since_init = 0;
 
-	game->button_move_up = platform_register_key(platform, PLATFORM_KEY_W);
-	game->button_move_down = platform_register_key(platform, PLATFORM_KEY_S);
-	game->button_quit = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
+	game->move_up_buttons[0] = platform_register_key(platform, PLATFORM_KEY_W);
+	game->move_down_buttons[0] = platform_register_key(platform, PLATFORM_KEY_S);
+	game->move_up_buttons[1] = platform_register_key(platform, PLATFORM_KEY_UP);
+	game->move_down_buttons[1] = platform_register_key(platform, PLATFORM_KEY_DOWN);
+	game->quit_button = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
 
 	game->client = nullptr;
 	game->server = nullptr;
@@ -84,6 +84,8 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 		case CONFIG_FULL_LOCAL:
 			game->local_server = true;
 			game->server = server_init(arena, false);
+			server_add_local_player(game->server);
+			server_add_local_player(game->server);
 			break;
 		case CONFIG_HALF_LOCAL:
 			game->local_server = true;
@@ -211,10 +213,10 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 
 				// NOW: Support for two local players. Will need new buttons and to
 				// associate them with either client.
-				if(platform_button_down(platform, game->button_move_up)) {
+				if(platform_button_down(platform, game->move_up_buttons[i])) {
 					event_input.input.move_up = 1.0f;
 				}
-				if(platform_button_down(platform, game->button_move_down)) {
+				if(platform_button_down(platform, game->move_down_buttons[i])) {
 					event_input.input.move_down = 1.0f;
 				}
 				server_push_event(server, (ServerEvent){ 
@@ -234,11 +236,11 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 		}
 	} else { // Server is remote.
 		Client* client = game->client;
-		if(platform_button_down(platform, game->button_move_up)) {
+		if(platform_button_down(platform, game->move_up_buttons[0])) {
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_UP;
 			client->events_len++;
 		}
-		if(platform_button_down(platform, game->button_move_down)) {
+		if(platform_button_down(platform, game->move_down_buttons[0])) {
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 			client->events_len++;
 		}
@@ -258,7 +260,7 @@ void game_update(Game* game, Platform* platform, RenderState* render_state)
 		}
 	}
 
-	game->close_requested = platform_button_down(platform, game->button_quit);
+	game->close_requested = platform_button_down(platform, game->quit_button);
 	game->frames_since_init++;
 }
 
