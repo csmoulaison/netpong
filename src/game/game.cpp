@@ -1,15 +1,4 @@
 // NOW: < LIST:
-// - Restructure the platform layer, turning it into a series of namespaced
-// engine subsystems which forward declare whatever platform specific stuff they
-// need. The engine part will be the same in every build, and this way we can
-// go all in on a maximally thin platform layer. As we add more platforms, the
-// goal of thinning out the platform layer while allowing for platform specific
-// optimizations should make things good and clear.
-//      [X] NETWORK
-//      [X] WINDOW
-//      [X] INPUT
-//      [ ] RENDERER
-//      [X] TIME
 // - Move connection acceptance/request pipeline over to the platform side of
 // things, including timeouts.
 // - Add some text rendering functionality so we can have some menus and debug
