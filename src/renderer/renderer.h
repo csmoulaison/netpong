@@ -5,7 +5,7 @@
 #define RENDER_LIST_RECTS_MAX 10
 
 #include "base/base.h"
-#include "platform/platform_media.h"
+#include "window/window.h"
 
 struct Renderer {
 	void* backend;
@@ -19,8 +19,8 @@ struct RenderState {
 	u8 rects_len;
 };
 
-Renderer* renderer_init(RendererInitSettings* settings, PlatformWindow* platform, Arena* arena);
-void renderer_update(Renderer* renderer, RenderState* render_state, PlatformWindow* platform, Arena* arena);
+Renderer* renderer_init(RendererInitSettings* settings, Windowing::Context* window, Arena* arena);
+void renderer_update(Renderer* renderer, RenderState* render_state, Windowing::Context* window, Arena* arena);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 

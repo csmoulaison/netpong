@@ -3,6 +3,7 @@
 
 #include "time/time.cpp"
 #include "network/network.cpp"
+#include "window/window.cpp"
 #include "renderer/renderer.h"
 
 #include "game/common/config.cpp"
@@ -16,17 +17,17 @@ i32 main(i32 argc, char** argv)
 {
 	Arena program_arena = arena_create(GIGABYTE);
 
-	PlatformWindow* platform = platform_init_pre_graphics(nullptr, &program_arena);
-	Renderer* renderer = renderer_init(nullptr, platform, &program_arena); 
+	Windowing::Context* window = Windowing::init_pre_graphics(&program_arena);
+	Renderer* renderer = renderer_init(nullptr, window, &program_arena); 
 
-	platform_init_post_graphics(platform);
+	Windowing::init_post_graphics(window);
 
 	Game* game;
 	char* ip_string = nullptr;
 	if(argc > 1) {
 		ip_string = argv[1];
 	}
-	game = game_init(platform, &program_arena, ip_string);
+	game = game_init(window, &program_arena, ip_string);
 
 	RenderState* previous_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
@@ -53,11 +54,11 @@ i32 main(i32 argc, char** argv)
 				frame_length = BASE_FRAME_LENGTH;
 			}
 
-			platform_update(platform, &program_arena);
+			Windowing::update(window, &program_arena);
 
 			memcpy(previous_render_state, current_render_state, sizeof(RenderState));
 			*current_render_state = {};
-			game_update(game, platform, current_render_state);
+			game_update(game, window, current_render_state);
 
 			if(first_frame) {
 				memcpy(previous_render_state, current_render_state, sizeof(RenderState));
@@ -72,7 +73,7 @@ i32 main(i32 argc, char** argv)
 		RenderState interpolated_render_state = renderer_interpolate_states(previous_render_state, current_render_state, time_alpha);
 
 		// Render based on render states now.
-		renderer_update(renderer, &interpolated_render_state, platform, &program_arena);
-		platform_swap_buffers(platform);
+		renderer_update(renderer, &interpolated_render_state, window, &program_arena);
+		Windowing::swap_buffers(window);
 	}
 }

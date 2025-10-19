@@ -6,10 +6,10 @@
 // goal of thinning out the platform layer while allowing for platform specific
 // optimizations should make things good and clear.
 //      [X] NETWORK
-//      [ ] WINDOW
-//      [ ] INPUT
+//      [X] WINDOW
+//      [X] INPUT
 //      [ ] RENDERER
-//      [ ] TIME
+//      [X] TIME
 // - Move connection acceptance/request pipeline over to the platform side of
 // things, including timeouts.
 // - Add some text rendering functionality so we can have some menus and debug
@@ -32,9 +32,9 @@ struct Game {
 	bool close_requested;
 	u32 frames_since_init;
 
-	ButtonHandle move_up_buttons[2];
-	ButtonHandle move_down_buttons[2];
-	ButtonHandle quit_button;
+	Windowing::ButtonHandle move_up_buttons[2];
+	Windowing::ButtonHandle move_down_buttons[2];
+	Windowing::ButtonHandle quit_button;
 
 	f32 visual_ball_position[2];
 	f32 visual_paddle_positions[2];
@@ -44,18 +44,18 @@ struct Game {
 	Server* server;
 };
 
-Game* game_init(PlatformWindow* platform, Arena* arena, char* ip_string) 
+Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string) 
 {
 	Game* game = (Game*)arena_alloc(arena, sizeof(Game));
 
 	game->close_requested = false;
 	game->frames_since_init = 0;
 
-	game->move_up_buttons[0] = platform_register_key(platform, PLATFORM_KEY_W);
-	game->move_down_buttons[0] = platform_register_key(platform, PLATFORM_KEY_S);
-	game->move_up_buttons[1] = platform_register_key(platform, PLATFORM_KEY_UP);
-	game->move_down_buttons[1] = platform_register_key(platform, PLATFORM_KEY_DOWN);
-	game->quit_button = platform_register_key(platform, PLATFORM_KEY_ESCAPE);
+	game->move_up_buttons[0] = Windowing::register_key(window, Windowing::Keycode::W);
+	game->move_down_buttons[0] = Windowing::register_key(window, Windowing::Keycode::S);
+	game->move_up_buttons[1] = Windowing::register_key(window, Windowing::Keycode::Up);
+	game->move_down_buttons[1] = Windowing::register_key(window, Windowing::Keycode::Down);
+	game->quit_button = Windowing::register_key(window, Windowing::Keycode::Escape);
 
 	game->client = nullptr;
 	game->server = nullptr;
@@ -106,9 +106,9 @@ Game* game_init(PlatformWindow* platform, Arena* arena, char* ip_string)
 	return game;
 }
 
-void render_rect(RenderState* render_state, Rect rect, PlatformWindow* platform)
+void render_rect(RenderState* render_state, Rect rect, Windowing::Context* window)
 {
-	f32 x_scale = (f32)platform->window_height / platform->window_width;
+	f32 x_scale = (f32)window->window_height / window->window_width;
 
 	Rect* rect_to_render = &render_state->rects[render_state->rects_len];
 	render_state->rects_len += 1;
@@ -127,7 +127,7 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-void render_requesting_connection_state(Game* game, RenderState* render_state, PlatformWindow* platform) 
+void render_requesting_connection_state(Game* game, RenderState* render_state, Windowing::Context* window) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -141,11 +141,11 @@ void render_requesting_connection_state(Game* game, RenderState* render_state, P
 		rect.y = 0.75f;
 		rect.w = 0.025f;
 		rect.h = 0.025f;
-		render_rect(render_state, rect, platform);
+		render_rect(render_state, rect, window);
 	}
 }
 
-void render_waiting_to_start_state(Game* game, RenderState* render_state, PlatformWindow* platform) 
+void render_waiting_to_start_state(Game* game, RenderState* render_state, Windowing::Context* window) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -157,11 +157,11 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Platfo
 		rect.y = 0.75f;
 		rect.w = 0.025f;
 		rect.h = 0.025f;
-		render_rect(render_state, rect, platform);
+		render_rect(render_state, rect, window);
 	}
 }
 
-void render_active_state(Game* game, RenderState* render_state, PlatformWindow* platform)
+void render_active_state(Game* game, RenderState* render_state, Windowing::Context* window)
 {
 	if(game->local_server) {
 		Server* server = game->server;
@@ -199,17 +199,17 @@ void render_active_state(Game* game, RenderState* render_state, PlatformWindow* 
 		paddle.y = game->visual_paddle_positions[i];
 		paddle.w = PADDLE_WIDTH;
 		paddle.h = PADDLE_HEIGHT;
-		render_rect(render_state, paddle, platform);
+		render_rect(render_state, paddle, window);
 	}
 	Rect ball;
 	ball.x = game->visual_ball_position[0];
 	ball.y = game->visual_ball_position[1];
 	ball.w = BALL_WIDTH;
 	ball.h = BALL_WIDTH;
-	render_rect(render_state, ball, platform);
+	render_rect(render_state, ball, window);
 }
 
-void game_update(Game* game, PlatformWindow* platform, RenderState* render_state)
+void game_update(Game* game, Windowing::Context* window, RenderState* render_state)
 {
 	if(game->local_server) {
 		Server* server = game->server;
@@ -219,10 +219,10 @@ void game_update(Game* game, PlatformWindow* platform, RenderState* render_state
 				ClientInput event_input = {};
 				event_input.frame = server->frame;
 
-				if(platform_button_down(platform, game->move_up_buttons[i])) {
+				if(Windowing::button_down(window, game->move_up_buttons[i])) {
 					event_input.input.move_up = 1.0f;
 				}
-				if(platform_button_down(platform, game->move_down_buttons[i])) {
+				if(Windowing::button_down(window, game->move_down_buttons[i])) {
 					event_input.input.move_down = 1.0f;
 				}
 
@@ -236,17 +236,17 @@ void game_update(Game* game, PlatformWindow* platform, RenderState* render_state
 		server_update(server, BASE_FRAME_LENGTH);
 
 		if(server_is_active(server)) {
-			render_active_state(game, render_state, platform);
+			render_active_state(game, render_state, window);
 		} else {
-			render_waiting_to_start_state(game, render_state, platform);
+			render_waiting_to_start_state(game, render_state, window);
 		}
 	} else { // Server is remote.
 		Client* client = game->client;
-		if(platform_button_down(platform, game->move_up_buttons[0])) {
+		if(Windowing::button_down(window, game->move_up_buttons[0])) {
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_UP;
 			client->events_len++;
 		}
-		if(platform_button_down(platform, game->move_down_buttons[0])) {
+		if(Windowing::button_down(window, game->move_down_buttons[0])) {
 			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 			client->events_len++;
 		}
@@ -254,19 +254,19 @@ void game_update(Game* game, PlatformWindow* platform, RenderState* render_state
 
 		switch(client->connection_state) {
 			case CLIENT_STATE_REQUESTING_CONNECTION:
-				render_requesting_connection_state(game, render_state, platform);
+				render_requesting_connection_state(game, render_state, window);
 				break;
 			case CLIENT_STATE_WAITING_TO_START:
-				render_waiting_to_start_state(game, render_state, platform);
+				render_waiting_to_start_state(game, render_state, window);
 				break;
 			case CLIENT_STATE_ACTIVE:
-				render_active_state(game, render_state, platform);
+				render_active_state(game, render_state, window);
 				break;
 			default: break;
 		}
 	}
 
-	game->close_requested = platform_button_down(platform, game->quit_button);
+	game->close_requested = Windowing::button_down(window, game->quit_button);
 	game->frames_since_init++;
 }
 

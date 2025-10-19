@@ -1,4 +1,4 @@
-#include "network.h"
+#include "network/network.h"
 
 namespace Network {
 	Network::Socket* init_server_socket(Arena* arena) {

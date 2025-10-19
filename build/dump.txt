@@ -1,0 +1,5 @@
+mkdir: cannot create directory ‘../bin’: File exists
+../src/window/xlib/xlib_window.cpp: In function ‘u32 platform_register_key(Windowing::Context*, Windowing::Keycode)’:
+../src/window/xlib/xlib_window.cpp:183:56: error: array subscript is not an integer
+  183 |         context->input_keycode_to_button_lookup[keycode] = context->input_buttons_len;
+      |                                                        ^

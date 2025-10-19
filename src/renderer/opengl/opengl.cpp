@@ -109,7 +109,7 @@ u32 gl_create_ubo(u64 size, void* data)
 	return ubo;
 }
 
-Renderer* renderer_init(RendererInitSettings* settings, PlatformWindow* platform, Arena* arena)
+Renderer* renderer_init(RendererInitSettings* settings, Windowing::Context* window, Arena* arena)
 {
 	Renderer* renderer = (Renderer*)arena_alloc(arena, sizeof(Renderer));
 	renderer->backend = arena_alloc(arena, sizeof(GlBackend));
@@ -177,19 +177,19 @@ Renderer* renderer_init(RendererInitSettings* settings, PlatformWindow* platform
 	gl->box_ubo = gl_create_ubo(sizeof(BoxUbo), nullptr);
 	//gl->text_ubo = gl_create_ubo(sizeof(TextUbo), nullptr);
 
-	glViewport(0, 0, platform->window_width, platform->window_height);
+	glViewport(0, 0, window->window_width, window->window_height);
 
 	return renderer;
 }
 
-void renderer_update(Renderer* renderer, RenderState* render_state, PlatformWindow* platform, Arena* arena)
+void renderer_update(Renderer* renderer, RenderState* render_state, Windowing::Context* window, Arena* arena)
 {
 	GlBackend* gl = (GlBackend*)renderer->backend;
 
-	if(platform->viewport_update_requested)
+	if(window->viewport_update_requested)
 	{
-		glViewport(0, 0, platform->window_width, platform->window_height);
-		platform->viewport_update_requested = false;
+		glViewport(0, 0, window->window_width, window->window_height);
+		window->viewport_update_requested = false;
 	}
 	
 	// Gl render
@@ -217,7 +217,7 @@ void renderer_update(Renderer* renderer, RenderState* render_state, PlatformWind
 				box.x, box.y, 0.0f, 1.0f
 			},
 			.scale = {
-				((f32)platform->window_height / platform->window_width) * box.w, 0.0f, 0.0f, 0.0f,
+				((f32)window->window_height / window->window_width) * box.w, 0.0f, 0.0f, 0.0f,
 				0.0f, box.h, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
 				0.0f, 0.0f, 0.0f, 1.0f
