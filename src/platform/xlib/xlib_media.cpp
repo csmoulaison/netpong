@@ -25,9 +25,9 @@ struct Xlib {
 
 #include "glx.cpp"
 
-Platform* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* arena) 
+PlatformWindow* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* arena) 
 {
-	Platform* platform = (Platform*)arena_alloc(arena, sizeof(Platform));
+	PlatformWindow* platform = (PlatformWindow*)arena_alloc(arena, sizeof(PlatformWindow));
 	Xlib* xlib = (Xlib*)arena_alloc(arena, sizeof(Xlib));
 
 	xlib->display = XOpenDisplay(0);
@@ -70,7 +70,7 @@ Platform* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* aren
 	return platform;
 }
 
-void platform_init_post_graphics(Platform* platform)
+void platform_init_post_graphics(PlatformWindow* platform)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 
@@ -111,7 +111,7 @@ u8 xlib_platform_from_x11_key(u32 keycode)
 	}
 }
 
-void platform_update(Platform* platform, Arena* arena) 
+void platform_update(PlatformWindow* platform, Arena* arena) 
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 
@@ -184,13 +184,13 @@ void platform_update(Platform* platform, Arena* arena)
 	}
 }
 
-void platform_swap_buffers(Platform* platform)
+void platform_swap_buffers(PlatformWindow* platform)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	glXSwapBuffers(xlib->display, xlib->window);
 }
 
-u32 platform_register_key(Platform* platform, u32 keycode)
+u32 platform_register_key(PlatformWindow* platform, u32 keycode)
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	xlib->input_keycode_to_button_lookup[keycode] = xlib->input_buttons_len;
@@ -203,19 +203,19 @@ u8 xlib_button_state(Xlib* xlib, u32 button_id)
 	return xlib->input_button_states[button_id];
 }
 
-bool platform_button_down(Platform* platform, u32 button_id) 
+bool platform_button_down(PlatformWindow* platform, u32 button_id) 
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	return xlib->input_button_states[button_id] & INPUT_DOWN_BIT;
 }
 
-bool platform_button_pressed(Platform* platform, u32 button_id) 
+bool platform_button_pressed(PlatformWindow* platform, u32 button_id) 
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	return xlib->input_button_states[button_id] & INPUT_PRESSED_BIT;
 }
 
-bool platform_button_released(Platform* platform, u32 button_id) 
+bool platform_button_released(PlatformWindow* platform, u32 button_id) 
 {
 	Xlib* xlib = (Xlib*)platform->backend;
 	return xlib->input_button_states[button_id] & INPUT_RELEASED_BIT;

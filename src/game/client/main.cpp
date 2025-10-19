@@ -2,7 +2,7 @@
 #include "base/base.h"
 
 #include "platform/platform_media.h"
-#include "platform/platform_network.h"
+#include "network/network.cpp"
 #include "platform/platform_time.h"
 #include "renderer/renderer.h"
 
@@ -17,7 +17,7 @@ i32 main(i32 argc, char** argv)
 {
 	Arena program_arena = arena_create(GIGABYTE);
 
-	Platform* platform = platform_init_pre_graphics(nullptr, &program_arena);
+	PlatformWindow* platform = platform_init_pre_graphics(nullptr, &program_arena);
 	Renderer* renderer = renderer_init(nullptr, platform, &program_arena); 
 
 	platform_init_post_graphics(platform);

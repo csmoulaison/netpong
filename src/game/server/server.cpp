@@ -58,7 +58,7 @@ struct ServerSlot {
 };
 
 struct Server {
-	PlatformSocket* socket;
+	Network::Socket* socket;
 	ServerSlot slots[2];
 	i32 connection_to_client_ids[2];
 
@@ -98,7 +98,7 @@ Server* server_init(Arena* arena, bool accept_client_connections)
 	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
 
 	if(accept_client_connections) {
-		server->socket = platform_init_server_socket(arena);
+		server->socket = Network::init_server_socket(arena);
 	} else {
 		server->socket = nullptr;
 	}
@@ -181,11 +181,11 @@ void server_handle_connection_request(Server* server, i32 connection_id)
 	ServerAcceptConnectionMessage accept_message;
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
-	platform_send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
+	Network::send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
 	return;
 
 reject_connection_request:
-	platform_free_connection(server->socket, connection_id);
+	Network::free_connection(server->socket, connection_id);
 	printf("Server: A client requested a connection (connection %u), but the game is full.\n", connection_id);
 }
 
@@ -260,9 +260,9 @@ void server_update_idle(Server* server, f32 dt)
 			if(client->ready_timeout_countdown <= 0.0f) {
 				ServerDisconnectMessage disconnect_message;
 				disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
-				platform_send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
+				Network::send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
 
-				platform_free_connection(server->socket, client->connection_id);
+				Network::free_connection(server->socket, client->connection_id);
 				client->state = SERVER_SLOT_OPEN;
 				printf("Server: Freed connection %u due to ready timeout.\n", i);
 			}
@@ -290,7 +290,7 @@ void server_update_active(Server* server, f32 delta_time)
 			if(latest_frame_received == -1) {
 				ServerStartGameMessage start_message;
 				start_message.type = SERVER_MESSAGE_START_GAME;
-				platform_send_packet(server->socket, client->connection_id, (void*)&start_message, sizeof(start_message));
+				Network::send_packet(server->socket, client->connection_id, (void*)&start_message, sizeof(start_message));
 				printf("Server: Sent start game packet to client %u.\n", i);
 				continue;
 			// Client speed up if the server is too far ahead, client slow down if the
@@ -300,12 +300,12 @@ void server_update_active(Server* server, f32 delta_time)
 				ServerSpeedUpMessage speed_message;
 				speed_message.type = SERVER_MESSAGE_SPEED_UP;
 				//speed_message.frame = server->frame;
-				platform_send_packet(server->socket, client->connection_id, &speed_message, sizeof(speed_message));
+				Network::send_packet(server->socket, client->connection_id, &speed_message, sizeof(speed_message));
 			} else if(latest_frame_received - server->frame > 6) {
 				ServerSlowDownMessage slow_message;
 				slow_message.type = SERVER_MESSAGE_SLOW_DOWN;
 				//slow_message.frame = server->frame;
-				platform_send_packet(server->socket, client->connection_id, &slow_message, sizeof(slow_message));
+				Network::send_packet(server->socket, client->connection_id, &slow_message, sizeof(slow_message));
 			}
 
 			// Optimally, we want to use the client input that coincides with the frame
@@ -333,9 +333,9 @@ void server_update_active(Server* server, f32 delta_time)
 			if(server->frame - effective_input_frame > INPUT_BUFFER_SIZE) {
 				ServerDisconnectMessage disconnect_message;
 				disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
-				platform_send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
+				Network::send_packet(server->socket, client->connection_id, &disconnect_message, sizeof(disconnect_message));
 
-				platform_free_connection(server->socket, client->connection_id);
+				Network::free_connection(server->socket, client->connection_id);
 				server->slots[i].state = SERVER_SLOT_OPEN;
 				printf("Server: Freed connection %u due to input buffer overflow.\n", i);
 
@@ -347,7 +347,7 @@ void server_update_active(Server* server, f32 delta_time)
 				if(other_client->type == SERVER_PLAYER_REMOTE) {
 					ServerEndGameMessage end_message;
 					end_message.type = SERVER_MESSAGE_END_GAME;
-					platform_send_packet(server->socket, other_client->connection_id, &end_message, sizeof(end_message));
+					Network::send_packet(server->socket, other_client->connection_id, &end_message, sizeof(end_message));
 					printf("Sent end game packet to connection %u due to other player timeout.\n", other_client->connection_id);
 				}
 
@@ -385,7 +385,7 @@ void server_update_active(Server* server, f32 delta_time)
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 		if(client->type == SERVER_PLAYER_REMOTE) {
-			platform_send_packet(server->socket, client->connection_id, &update_message, sizeof(update_message));
+			Network::send_packet(server->socket, client->connection_id, &update_message, sizeof(update_message));
 		}
 	}
 
@@ -396,7 +396,7 @@ void server_process_packets(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPacket* packet = platform_receive_packets(server->socket, &packet_arena);
+	Network::Packet* packet = Network::receive_packets(server->socket, &packet_arena);
 
 	bool new_connections[2] = { false, false };
 
@@ -494,7 +494,7 @@ void server_update(Server* server, f32 delta_time)
 	server_process_events(server);
 
 #if NETWORK_SIM_MODE
-	platform_update_sim_mode(server->socket, delta_time);
+	Network::update_sim_mode(server->socket, delta_time);
 #endif
 
 	if(server_is_active(server)) {

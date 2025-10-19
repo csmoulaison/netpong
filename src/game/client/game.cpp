@@ -1,20 +1,15 @@
-// NOW: < LIST: We have a server able to be hosted locally and the ability to
-// play fully locally. Next:
-// - Make a dead simple bot which sends input messages to the server like a
-// client.
-// - Assess whether the way events are being handled is sensical or if anything
-// needs to be more systemetized.
-// - Definitely think about how things might be factored around better. Might be
-// worth doing this as we do the next steps.
-//
-// AFTERWARDS, the following are on the agenda:
+// NOW: < LIST:
 // - Restructure the platform layer, turning it into a series of namespaced
 // engine subsystems which forward declare whatever platform specific stuff they
 // need. The engine part will be the same in every build, and this way we can
 // go all in on a maximally thin platform layer. As we add more platforms, the
 // goal of thinning out the platform layer while allowing for platform specific
 // optimizations should make things good and clear.
-//      (even those that other subsystems use if needed)
+//      [X] NETWORK
+//      [ ] WINDOW
+//      [ ] INPUT
+//      [ ] RENDERER
+//      [ ] TIME
 // - Move connection acceptance/request pipeline over to the platform side of
 // things, including timeouts.
 // - Add some text rendering functionality so we can have some menus and debug
@@ -49,7 +44,7 @@ struct Game {
 	Server* server;
 };
 
-Game* game_init(Platform* platform, Arena* arena, char* ip_string) 
+Game* game_init(PlatformWindow* platform, Arena* arena, char* ip_string) 
 {
 	Game* game = (Game*)arena_alloc(arena, sizeof(Game));
 
@@ -111,7 +106,7 @@ Game* game_init(Platform* platform, Arena* arena, char* ip_string)
 	return game;
 }
 
-void render_rect(RenderState* render_state, Rect rect, Platform* platform)
+void render_rect(RenderState* render_state, Rect rect, PlatformWindow* platform)
 {
 	f32 x_scale = (f32)platform->window_height / platform->window_width;
 
@@ -132,7 +127,7 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-void render_requesting_connection_state(Game* game, RenderState* render_state, Platform* platform) 
+void render_requesting_connection_state(Game* game, RenderState* render_state, PlatformWindow* platform) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -150,7 +145,7 @@ void render_requesting_connection_state(Game* game, RenderState* render_state, P
 	}
 }
 
-void render_waiting_to_start_state(Game* game, RenderState* render_state, Platform* platform) 
+void render_waiting_to_start_state(Game* game, RenderState* render_state, PlatformWindow* platform) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -166,7 +161,7 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Platfo
 	}
 }
 
-void render_active_state(Game* game, RenderState* render_state, Platform* platform)
+void render_active_state(Game* game, RenderState* render_state, PlatformWindow* platform)
 {
 	if(game->local_server) {
 		Server* server = game->server;
@@ -214,7 +209,7 @@ void render_active_state(Game* game, RenderState* render_state, Platform* platfo
 	render_rect(render_state, ball, platform);
 }
 
-void game_update(Game* game, Platform* platform, RenderState* render_state)
+void game_update(Game* game, PlatformWindow* platform, RenderState* render_state)
 {
 	if(game->local_server) {
 		Server* server = game->server;

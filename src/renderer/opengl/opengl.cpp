@@ -109,7 +109,7 @@ u32 gl_create_ubo(u64 size, void* data)
 	return ubo;
 }
 
-Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena)
+Renderer* renderer_init(RendererInitSettings* settings, PlatformWindow* platform, Arena* arena)
 {
 	Renderer* renderer = (Renderer*)arena_alloc(arena, sizeof(Renderer));
 	renderer->backend = arena_alloc(arena, sizeof(GlBackend));
@@ -182,7 +182,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Aren
 	return renderer;
 }
 
-void renderer_update(Renderer* renderer, RenderState* render_state, Platform* platform, Arena* arena)
+void renderer_update(Renderer* renderer, RenderState* render_state, PlatformWindow* platform, Arena* arena)
 {
 	GlBackend* gl = (GlBackend*)renderer->backend;
 

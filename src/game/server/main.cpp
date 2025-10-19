@@ -5,7 +5,7 @@
 
 #include "base/base.h"
 #include "platform/platform_time.h"
-#include "platform/platform_network.h"
+#include "network/network.cpp"
 #include "renderer/renderer.h"
 
 #include "game/common/config.cpp"

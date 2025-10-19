@@ -21,7 +21,7 @@
 
 typedef u32 ButtonHandle;
 
-struct Platform {
+struct PlatformWindow {
 	void* backend;
 
 	bool viewport_update_requested;
@@ -35,29 +35,29 @@ struct PlatformInitSettings {
 
 // Performs all initialization tasks that can be done before initialization of
 // the graphics API backend, returning the allocated Platform layer.
-Platform* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* arena);
+PlatformWindow* platform_init_pre_graphics(PlatformInitSettings* settings, Arena* arena);
 
 // Performs all initialization tasks that cannot be done before initialization
 // of the graphics API backend.
-void platform_init_post_graphics(Platform* platform);
+void platform_init_post_graphics(PlatformWindow* platform);
 
 // Updates the platform layer, responding to OS events and such.
-void platform_update(Platform* platform, Arena* arena);
+void platform_update(PlatformWindow* platform, Arena* arena);
 
 // Presents the contents of the backbuffer. Called after graphics API backend
 // has performed an update.
-void platform_swap_buffers(Platform* platform);
+void platform_swap_buffers(PlatformWindow* platform);
 
 // TODO: move this to platform_input
 // 
 // Returns an identifier that can be used to check the state of a particular
 // keycode (assigned to a button) at a later time.
-ButtonHandle platform_register_key(Platform* platform, u32 keycode);
+ButtonHandle platform_register_key(PlatformWindow* platform, u32 keycode);
 
 // Returns whether a button is down/pressed/released given the identifier
 // returned by platform_register_button.
-bool platform_button_down(Platform* platform, u32 button_id);
-bool platform_button_pressed(Platform* platform, u32 button_id);
-bool platform_button_released(Platform* platform, u32 button_id);
+bool platform_button_down(PlatformWindow* platform, u32 button_id);
+bool platform_button_pressed(PlatformWindow* platform, u32 button_id);
+bool platform_button_released(PlatformWindow* platform, u32 button_id);
 
 #endif

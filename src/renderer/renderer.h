@@ -19,8 +19,8 @@ struct RenderState {
 	u8 rects_len;
 };
 
-Renderer* renderer_init(RendererInitSettings* settings, Platform* platform, Arena* arena);
-void renderer_update(Renderer* renderer, RenderState* render_state, Platform* platform, Arena* arena);
+Renderer* renderer_init(RendererInitSettings* settings, PlatformWindow* platform, Arena* arena);
+void renderer_update(Renderer* renderer, RenderState* render_state, PlatformWindow* platform, Arena* arena);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 

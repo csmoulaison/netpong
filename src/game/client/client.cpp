@@ -38,7 +38,7 @@ struct ClientEvent {
 };
 
 struct Client {
-	PlatformSocket* socket;
+	Network::Socket* socket;
 
 	ClientEvent events[MAX_CLIENT_EVENTS];
 	u32 events_len;
@@ -91,7 +91,7 @@ void client_reset_game(Client* client)
 Client* client_init(Arena* arena, char* ip_string)
 {
 	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
-	client->socket = platform_init_client_socket(arena, ip_string);
+	client->socket = Network::init_client_socket(arena, ip_string);
 
 	client->events_len = 0;
 	client->move_up = false;
@@ -176,7 +176,7 @@ void client_simulate_and_advance_frame(Client* client)
 		input_message.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
 	}
 
-	platform_send_packet(client->socket, 0, &input_message, sizeof(input_message));
+	Network::send_packet(client->socket, 0, &input_message, sizeof(input_message));
 
 	client->frame++;
 }
@@ -278,14 +278,14 @@ void client_update_requesting_connection(Client* client)
 {
 	ClientRequestConnectionMessage request_message;
 	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
-	platform_send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
+	Network::send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
 }
 
 void client_update_waiting_to_start(Client* client)
 {
 	ClientReadyToStartMessage ready_message;
 	ready_message.type = CLIENT_MESSAGE_READY_TO_START;
-	platform_send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
+	Network::send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
 
 }
 
@@ -298,7 +298,7 @@ void client_process_packets(Client* client)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena = arena_create(16000);
-	PlatformPacket* packet = platform_receive_packets(client->socket, &packet_arena);
+	Network::Packet* packet = Network::receive_packets(client->socket, &packet_arena);
 
 	while(packet != nullptr) {
 		u8 type = *(u8*)packet->data;
@@ -393,7 +393,7 @@ void client_update(Client* client)
 	// TODO: It is certainly wrong to use client->frame_length for this, and we
 	// should certainly have a notion of delta time which is decoupled from the
 	// network tick.
-	platform_update_sim_mode(client->socket, client->frame_length);
+	Network::update_sim_mode(client->socket, client->frame_length);
 #endif
 	
 	switch(client->connection_state) {
