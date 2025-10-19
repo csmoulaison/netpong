@@ -106,7 +106,7 @@ Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string)
 	return game;
 }
 
-void render_rect(RenderState* render_state, Rect rect, Windowing::Context* window)
+void render_rect(Render::State* render_state, Rect rect, Windowing::Context* window)
 {
 	f32 x_scale = (f32)window->window_height / window->window_width;
 
@@ -127,7 +127,7 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-void render_requesting_connection_state(Game* game, RenderState* render_state, Windowing::Context* window) 
+void render_requesting_connection_state(Game* game, Render::State* render_state, Windowing::Context* window) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -145,7 +145,7 @@ void render_requesting_connection_state(Game* game, RenderState* render_state, W
 	}
 }
 
-void render_waiting_to_start_state(Game* game, RenderState* render_state, Windowing::Context* window) 
+void render_waiting_to_start_state(Game* game, Render::State* render_state, Windowing::Context* window) 
 {
 	// Render blinking indicator.
 	for(u8 i = 0; i < 3; i++) {
@@ -161,7 +161,7 @@ void render_waiting_to_start_state(Game* game, RenderState* render_state, Window
 	}
 }
 
-void render_active_state(Game* game, RenderState* render_state, Windowing::Context* window)
+void render_active_state(Game* game, Render::State* render_state, Windowing::Context* window)
 {
 	if(game->local_server) {
 		Server* server = game->server;
@@ -209,7 +209,7 @@ void render_active_state(Game* game, RenderState* render_state, Windowing::Conte
 	render_rect(render_state, ball, window);
 }
 
-void game_update(Game* game, Windowing::Context* window, RenderState* render_state)
+void game_update(Game* game, Windowing::Context* window, Render::State* render_state)
 {
 	if(game->local_server) {
 		Server* server = game->server;

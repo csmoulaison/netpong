@@ -109,9 +109,9 @@ u32 gl_create_ubo(u64 size, void* data)
 	return ubo;
 }
 
-Renderer* renderer_init(RendererInitSettings* settings, Windowing::Context* window, Arena* arena)
+Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 {
-	Renderer* renderer = (Renderer*)arena_alloc(arena, sizeof(Renderer));
+	Render::Context* renderer = (Render::Context*)arena_alloc(arena, sizeof(Render::Context));
 	renderer->backend = arena_alloc(arena, sizeof(GlBackend));
 	GlBackend* gl = (GlBackend*)renderer->backend;
 
@@ -182,7 +182,7 @@ Renderer* renderer_init(RendererInitSettings* settings, Windowing::Context* wind
 	return renderer;
 }
 
-void renderer_update(Renderer* renderer, RenderState* render_state, Windowing::Context* window, Arena* arena)
+void platform_render_update(Render::Context* renderer, Render::State* render_state, Windowing::Context* window, Arena* arena)
 {
 	GlBackend* gl = (GlBackend*)renderer->backend;
 
