@@ -1,9 +1,8 @@
 #define CSM_BASE_IMPLEMENTATION
 #include "base/base.h"
 
-#include "platform/platform_media.h"
+#include "time/time.cpp"
 #include "network/network.cpp"
-#include "platform/platform_time.h"
 #include "renderer/renderer.h"
 
 #include "game/common/config.cpp"
@@ -33,13 +32,13 @@ i32 main(i32 argc, char** argv)
 	RenderState* current_render_state = (RenderState*)arena_alloc(&program_arena, sizeof(RenderState));
 
 	double time = 0.0f;
-	double current_time = platform_time_in_seconds();
+	double current_time = Time::seconds();
 	double time_accumulator = 0.0f;
 	bool first_frame = true;
 	double frame_length = BASE_FRAME_LENGTH;
 
 	while(game_close_requested(game) != true) {
-		double new_time = platform_time_in_seconds();
+		double new_time = Time::seconds();
 		double frame_time = new_time - current_time;
 		if(frame_time > 0.25f) {
 			frame_time = 0.25f;

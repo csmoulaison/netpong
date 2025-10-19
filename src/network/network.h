@@ -1,5 +1,5 @@
-#ifndef platform_network_h_INCLUDED
-#define platform_network_h_INCLUDED
+#ifndef network_h_INCLUDED
+#define network_h_INCLUDED
 
 #include "base/base.h"
 

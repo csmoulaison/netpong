@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 #include "base/base.h"
-#include "platform/platform_time.h"
+#include "time/time.cpp"
 #include "network/network.cpp"
 #include "renderer/renderer.h"
 
@@ -21,14 +21,14 @@ i32 main(i32 argc, char** argv)
 	double time = 0.0f;
 	double delta_time = BASE_FRAME_LENGTH;
 
-	double current_time = platform_time_in_seconds();
+	double current_time = Time::seconds();
 	double accumulator_time = 0.0f;
 
 	while(server_close_requested(server) != true) {
 		server_update(server, delta_time);
 
 		while(accumulator_time < delta_time) {
-			double new_time = platform_time_in_seconds();
+			double new_time = Time::seconds();
 			accumulator_time += new_time - current_time;
 			current_time = new_time;
 		}
