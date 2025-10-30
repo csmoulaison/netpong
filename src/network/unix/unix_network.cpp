@@ -81,7 +81,7 @@ Network::Socket* platform_init_client_socket(Arena* arena, char* ip_string)
 
 	server->address.sin_family = AF_INET;
 	server->address.sin_port = htons(8080);
-	if(ip_string == nullptr) {
+	if(ip_string[0] == '\0') {
 		server->address.sin_addr.s_addr = INADDR_ANY;
 	} else {
 		if(inet_pton(AF_INET, ip_string, &server->address.sin_addr) <= 0) {

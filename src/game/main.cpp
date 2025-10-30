@@ -61,7 +61,7 @@ i32 main(i32 argc, char** argv)
 			Windowing::update(window, &program_arena);
 
 			Render::advance_state(previous_render_state, current_render_state);
-			game_update(game, window, current_render_state);
+			game_update(game, window, current_render_state, &program_arena);
 
 			time_accumulator -= frame_length;
 			time += frame_length;

@@ -32,6 +32,8 @@ struct Game {
 	Windowing::ButtonHandle quit_button;
 	Windowing::ButtonHandle select_button;
 
+	char ip_string[16];
+
 	i32 menu_selection;
 	float menu_activations[MENU_OPTIONS_LEN];
 
@@ -58,27 +60,29 @@ Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string)
 	game->quit_button = Windowing::register_key(window, Windowing::Keycode::Escape);
 	game->select_button = Windowing::register_key(window, Windowing::Keycode::Space);
 
+	if(ip_string != nullptr) {
+		memcpy(game->ip_string, ip_string, 16);
+	} else {
+		game->ip_string[0] = '\0';
+	}
+
 	game->menu_selection = 0;
+	for(i32 i = 0; i < MENU_OPTIONS_LEN; i++) {
+		game->menu_activations[i] = 0.0f;
+	}
 
 	game->client = nullptr;
 	game->server = nullptr;
 
-	i32 config_setting = CONFIG_REMOTE;
-	if(ip_string != nullptr) {
-		if(strcmp(ip_string, "host") == 0) {
-			config_setting = CONFIG_HALF_LOCAL;
-		} else if(strcmp(ip_string, "local") == 0) {
-			config_setting = CONFIG_FULL_LOCAL;
-		} else if(strcmp(ip_string, "fullbot") == 0) {
-			config_setting = CONFIG_FULL_BOT;
-		} else if(strcmp(ip_string, "halfbot") == 0) {
-			config_setting = CONFIG_HALF_BOT;
-		}
-	}
+	return game;
+}
+
+void game_init_session(Game* game, i32 config_setting, Arena* arena) 
+{
 	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
-			game->client = client_init(arena, ip_string);
+			game->client = client_init(arena, game->ip_string);
 			break;
 		case CONFIG_FULL_LOCAL:
 			game->local_server = true;
@@ -105,8 +109,6 @@ Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string)
 			break;
 		default: break;
 	}
-
-	return game;
 }
 
 void render_rect(Render::State* render_state, Rect rect, Windowing::Context* window)
@@ -208,7 +210,7 @@ void render_active_state(Game* game, Render::State* render_state, Windowing::Con
 	render_rect(render_state, ball, window);
 }
 
-void game_update(Game* game, Windowing::Context* window, Render::State* render_state)
+void game_update(Game* game, Windowing::Context* window, Render::State* render_state, Arena* arena)
 {
 	if(game->state == GameState::Menu) {
 		if(Windowing::button_pressed(window, game->move_up_buttons[0])) {
@@ -254,6 +256,7 @@ void game_update(Game* game, Windowing::Context* window, Render::State* render_s
 
 		if(Windowing::button_pressed(window, game->select_button)) {
 			game->state = GameState::Session;
+			game_init_session(game, game->menu_selection, arena);
 		}
 	} else {
 		if(game->local_server) {
