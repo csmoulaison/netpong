@@ -2,42 +2,35 @@
 
 #include "GL/gl3w.h"
 
-#define STB_IMAGE_IMPLEMENTATION
-#define STBI_ONLY_BMP
-#include "stb/stb_image.h"
+#include <ft2build.h>
+#include FT_FREETYPE_H
 
-#define TEXT_MAX_CHARS 4096
+#define MAX_FONT_CHARACTERS 128
 
-typedef struct
-{
-	i32 index;
-	f32 x;
-	f32 y;
-	f32 size;
-	f32 color;
-} TextChar;
+struct FontCharacter {
+	u32 texture_id;
+	u32 size[2];
+	i32 bearing[2];
+	u32 advance;
+};
 
 typedef struct
 {
 	f32 translation[16];
 	f32 scale[16];
-} BoxUbo;
-
-typedef struct
-{
-	// this is a mat2, but must be separated like this for padding requirements.
-	alignas(16) f32 transform_a[2];
-	alignas(16) f32 transform_b[2];
-} TextUbo;
+} QuadUbo;
 
 typedef struct {
-	u32 box_program;
-	u32 text_program;
+	FontCharacter font_characters[MAX_FONT_CHARACTERS];
 
-	u32 box_ubo;
-	u32 text_ubo;
-
+	u32 quad_program;
+	u32 quad_ubo;
 	u32 quad_vao;
+
+	u32 text_program;
+	u32 text_vao;
+	u32 text_vbo;
+	
 	u32 text_buffer_ssbo;
 	u32 font_texture;
 } GlBackend;
@@ -109,6 +102,27 @@ u32 gl_create_ubo(u64 size, void* data)
 	return ubo;
 }
 
+void mat_ortho(float left, float right, float bottom, float top, float near_z, float far_z, float dst[16])
+{
+	float rl, tb, fn;
+
+	for(u8 i = 0; i < 16; i++) {
+		dst[i] = 0.0f;
+	}
+
+	rl =  1.0f / (right - left);
+	tb =  1.0f / (top   - bottom);
+	fn = -1.0f / (far_z - near_z);
+
+	dst[0] = 2.0f * rl;
+	dst[5] = 2.0f * tb;
+	dst[10] =-fn;
+	dst[12] =-(right + left)   * rl;
+	dst[13] =-(top   + bottom) * tb;
+	dst[14] = near_z * fn;
+	dst[15] = 1.0f;
+}
+
 Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 {
 	Render::Context* renderer = (Render::Context*)arena_alloc(arena, sizeof(Render::Context));
@@ -124,10 +138,9 @@ Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	gl->box_program = gl_create_program("shaders/box.vert", "shaders/box.frag");
-	gl->text_program = gl_create_program("shaders/text.vert", "shaders/text.frag");
+	// Quad rendering
+	gl->quad_program = gl_create_program("shaders/quad.vert", "shaders/quad.frag");
 
-	// Vertex arrays/buffers
 	f32 quad_vertices[] = {
 		 1.0f,  1.0f,
 		 1.0f, -1.0f,
@@ -145,38 +158,74 @@ Render::Context* platform_render_init(Windowing::Context* window, Arena* arena)
 	glGenBuffers(1, &quad_vbo);
 	glBindBuffer(GL_ARRAY_BUFFER, quad_vbo);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quad_vertices), quad_vertices, GL_STATIC_DRAW);
-
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(f32), (void*)0);
 
-	/* Font atlas texture
-	glGenTextures(1, &gl->font_texture);
-	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	gl->quad_ubo = gl_create_ubo(sizeof(QuadUbo), nullptr);
 
-	i32 w, h, channels;
-	unsigned char* texture_data = stbi_load("fonts/plex_mono.bmp", &w, &h, &channels, 3);
-	if(texture_data == nullptr) {
-		panic();
+	// Text rendering
+	gl->text_program = gl_create_program("shaders/text.vert", "shaders/text.frag");
+	 
+	// Font texture loading
+	// TODO: Move offline
+	FT_Library ft;
+	if (FT_Init_FreeType(&ft)) { panic(); }
+
+	FT_Face face;
+	//if(FT_New_Face(ft, "fonts/BerkeleyMono-Regular.ttf", 0, &face)) { panic(); }
+	if(FT_New_Face(ft, "fonts/Ovo-Regular.ttf", 0, &face)) { panic(); }
+	FT_Set_Pixel_Sizes(face, 0, 96);
+
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
+	for(unsigned char c = 0; c < MAX_FONT_CHARACTERS; c++) {
+		if(FT_Load_Char(face, c, FT_LOAD_RENDER)) { 
+			panic(); 
+		}
+
+		u32 tex;
+		glGenTextures(1, &tex);
+		glBindTexture(GL_TEXTURE_2D, tex);
+		glTexImage2D(
+			GL_TEXTURE_2D, 
+			0, 
+			GL_RED, 
+			face->glyph->bitmap.width,
+			face->glyph->bitmap.rows,
+			0,
+			GL_RED,
+			GL_UNSIGNED_BYTE,
+			face->glyph->bitmap.buffer);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		FontCharacter font_character = {
+			tex,
+			{ face->glyph->bitmap.width, face->glyph->bitmap.rows },
+			{ face->glyph->bitmap_left, face->glyph->bitmap_top },
+			(u32)face->glyph->advance.x
+		};
+		gl->font_characters[c] = font_character;
 	}
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, texture_data);
-	glGenerateMipmap(GL_TEXTURE_2D);
-	stbi_image_free(texture_data);
 
-	// Text SSBO
-	glGenBuffers(1, &gl->text_buffer_ssbo);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->text_buffer_ssbo);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(TextChar[TEXT_MAX_CHARS]), nullptr, GL_DYNAMIC_DRAW);
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, gl->text_buffer_ssbo);
-	*/
+	glBindTexture(GL_TEXTURE_2D, 0);
+	FT_Done_Face(face);
+	FT_Done_FreeType(ft);
 
-	// UBOs
-	gl->box_ubo = gl_create_ubo(sizeof(BoxUbo), nullptr);
-	//gl->text_ubo = gl_create_ubo(sizeof(TextUbo), nullptr);
+	// Text vertex array/buffer
+	glGenVertexArrays(1, &gl->text_vao);
+	glBindVertexArray(gl->text_vao);
 
+	glGenBuffers(1, &gl->text_vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, gl->text_vbo);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(f32) * 6 * 4, nullptr, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(f32), 0);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
 	glViewport(0, 0, window->window_width, window->window_height);
 
 	return renderer;
@@ -197,74 +246,90 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Draw rects
-	glUseProgram(gl->box_program);
-	u32 box_ubo_block_index = glGetUniformBlockIndex(gl->box_program, "ubo");
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->box_ubo);
-	glUniformBlockBinding(gl->box_program, box_ubo_block_index, 0);
+	glUseProgram(gl->quad_program);
+	u32 quad_ubo_block_index = glGetUniformBlockIndex(gl->quad_program, "ubo");
+	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->quad_ubo);
+	glUniformBlockBinding(gl->quad_program, quad_ubo_block_index, 0);
 
 	glBindVertexArray(gl->quad_vao);
 
 	for(u32 i = 0; i < render_state->rects_len; i++)
 	{
 		// Update ubo
-		Rect box = render_state->rects[i];
+		Rect quad = render_state->rects[i];
 
-		BoxUbo box_ubo = {
+		QuadUbo quad_ubo = {
 			.translation = {
 				1.0f, 0.0f, 0.0f, 0.0f,
 				0.0f, 1.0f, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
-				box.x, box.y, 0.0f, 1.0f
+				quad.x, quad.y, 0.0f, 1.0f
 			},
 			.scale = {
-				((f32)window->window_height / window->window_width) * box.w, 0.0f, 0.0f, 0.0f,
-				0.0f, box.h, 0.0f, 0.0f,
+				((f32)window->window_height / window->window_width) * quad.w, 0.0f, 0.0f, 0.0f,
+				0.0f, quad.h, 0.0f, 0.0f,
 				0.0f, 0.0f, 1.0f, 0.0f,
 				0.0f, 0.0f, 0.0f, 1.0f
 			}
 		};
 
-		glBindBuffer(GL_UNIFORM_BUFFER, gl->box_ubo);
-		void* p_box_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-		memcpy(p_box_ubo, &box_ubo, sizeof(BoxUbo));
+		glBindBuffer(GL_UNIFORM_BUFFER, gl->quad_ubo);
+		void* p_quad_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
+		memcpy(p_quad_ubo, &quad_ubo, sizeof(QuadUbo));
 		glUnmapBuffer(GL_UNIFORM_BUFFER);
 
 		// Draw
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 
-	/* Update text ubo
-	TextUbo text_ubo;	
-	f32 text_scale_x = 27.0f / render_state->window_width;
-	f32 text_scale_y = 46.0f / render_state->window_height;
-
-	//v2_init(text_ubo.transform_a, text_scale_x,  0);
-	//v2_init(text_ubo.transform_b, 0, -text_scale_y);
-
-	glBindBuffer(GL_UNIFORM_BUFFER, gl->text_ubo);
-	void* p_text_ubo = glMapBuffer(GL_UNIFORM_BUFFER, GL_WRITE_ONLY);
-	memcpy(p_text_ubo, &text_ubo, sizeof(text_ubo));
-	glUnmapBuffer(GL_UNIFORM_BUFFER);
-
-	// Update text ssbo buffer
-	// TODO - 1. Improve text rendering API, moving some of it to game code.
-	//        2. Reason about where different calculations should be made between
-	//           GPU and host. Probably a lot more here, obviously.
-	//        3. Keep in mind any additional features such as text color and things.
-	TextChar text_buffer[TEXT_MAX_CHARS] = {0};
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, gl->text_buffer_ssbo);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(text_buffer), text_buffer);
-
 	// Draw text
+	//  TODO: Font atlas packing
+	//  TODO: Multiple fonts
 	glUseProgram(gl->text_program);
-
-	u32 text_ubo_block_index = glGetUniformBlockIndex(gl->text_program, "ubo");
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, gl->text_ubo);
-	glUniformBlockBinding(gl->text_program, text_ubo_block_index, 0);
-
 	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, gl->font_texture);
-	glBindVertexArray(gl->quad_vao); // TODO - redundant, considering we have no other VAOs to bind, yes?
-	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 0); // TODO - draw correct amount of text quads
-	*/
+	glBindVertexArray(gl->text_vao);
+
+	float projection[16];
+	mat_ortho(0.0f, window->window_width, 0.0f, window->window_height, 0.0f, 500.0f, projection);
+    glUniformMatrix4fv(glGetUniformLocation(gl->text_program, "projection"), 1, GL_FALSE, projection);
+
+	for(u32 i = 0; i < render_state->texts_len; i++) {
+		Render::Text* text = &render_state->texts[i];
+		float x = text->position[0];
+		float y = text->position[1];
+		float scale = text->scale;
+
+		glUniform4f(glGetUniformLocation(gl->text_program, "text_color"), text->color[0], text->color[1], text->color[2], text->color[3]);
+
+		for(u32 j = 0; j < text->len; j++) {
+			FontCharacter c = gl->font_characters[text->string[j]];
+
+			float xpos = x + c.bearing[0] * scale;
+			float ypos = y - (c.size[1] - c.bearing[1]) * scale;
+
+			float w = c.size[0] * scale;
+			float h = c.size[1] * scale;
+
+			float char_vertices[6][4] = {
+				{ xpos,     ypos + h, 0.0f, 0.0f },
+				{ xpos,     ypos,     0.0f, 1.0f },
+				{ xpos + w, ypos,     1.0f, 1.0f },
+
+				{ xpos,     ypos + h, 0.0f, 0.0f },
+				{ xpos + w, ypos,     1.0f, 1.0f },
+				{ xpos + w, ypos + h, 1.0f, 0.0f },
+			};
+
+			glBindTexture(GL_TEXTURE_2D, c.texture_id);
+			glBindBuffer(GL_ARRAY_BUFFER, gl->text_vbo);
+			glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(char_vertices), char_vertices);
+	        glBindBuffer(GL_ARRAY_BUFFER, 0);
+	        glDrawArrays(GL_TRIANGLES, 0, 6);
+	        x += (c.advance >> 6) * scale;
+		}
+	}
+
+	// Unbind stuff
+	glBindVertexArray(0);
+	glBindTexture(GL_TEXTURE_2D, 0);
 }

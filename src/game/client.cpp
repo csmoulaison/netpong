@@ -297,7 +297,8 @@ void client_update_active(Client* client)
 void client_process_packets(Client* client)
 {
 	// TODO: Allocate arena from existing arena.
-	Arena packet_arena = arena_create(16000);
+	Arena packet_arena;
+	arena_init(&packet_arena, 16000);
 	Network::Packet* packet = Network::receive_packets(client->socket, &packet_arena);
 
 	while(packet != nullptr) {

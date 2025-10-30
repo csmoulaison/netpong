@@ -15,11 +15,11 @@
 
 i32 main(i32 argc, char** argv)
 {
-	Arena program_arena = arena_create(GIGABYTE);
+	Arena program_arena;
+	arena_init(&program_arena, GIGABYTE);
 
 	Windowing::Context* window = Windowing::init_pre_graphics(&program_arena);
 	Render::Context* renderer = Render::init(window, &program_arena); 
-
 	Windowing::init_post_graphics(window);
 
 	Game* game;
@@ -31,6 +31,10 @@ i32 main(i32 argc, char** argv)
 
 	Render::State* previous_render_state = (Render::State*)arena_alloc(&program_arena, sizeof(Render::State));
 	Render::State* current_render_state = (Render::State*)arena_alloc(&program_arena, sizeof(Render::State));
+	arena_init(&current_render_state->texts_arena, 16000); // TODO: Suballocation
+	arena_init(&previous_render_state->texts_arena, 16000); // TODO: Suballocation
+	*previous_render_state = {};
+	*current_render_state = {};
 
 	double time = 0.0f;
 	double current_time = Time::seconds();
@@ -56,21 +60,21 @@ i32 main(i32 argc, char** argv)
 
 			Windowing::update(window, &program_arena);
 
-			memcpy(previous_render_state, current_render_state, sizeof(Render::State));
-			*current_render_state = {};
+			Render::advance_state(previous_render_state, current_render_state);
 			game_update(game, window, current_render_state);
-
-			if(first_frame) {
-				memcpy(previous_render_state, current_render_state, sizeof(Render::State));
-				first_frame = false;
-			}
 
 			time_accumulator -= frame_length;
 			time += frame_length;
 		}
 
-		double time_alpha = time_accumulator / frame_length;
-		Render::State interpolated_render_state = Render::interpolate_states(previous_render_state, current_render_state, time_alpha);
+		Render::State interpolated_render_state;
+		if(first_frame) {
+			first_frame = false;
+			interpolated_render_state = *current_render_state;
+		} else {
+			double time_alpha = time_accumulator / frame_length;
+			interpolated_render_state = Render::interpolate_states(previous_render_state, current_render_state, time_alpha);
+		}
 
 		// Render based on render states now.
 		Render::update(renderer, &interpolated_render_state, window, &program_arena);

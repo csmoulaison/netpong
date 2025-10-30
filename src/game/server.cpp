@@ -395,7 +395,8 @@ void server_update_active(Server* server, f32 delta_time)
 void server_process_packets(Server* server)
 {
 	// TODO: Allocate arena from existing arena.
-	Arena packet_arena = arena_create(16000);
+	Arena packet_arena;
+	arena_init(&packet_arena, 16000);
 	Network::Packet* packet = Network::receive_packets(server->socket, &packet_arena);
 
 	bool new_connections[2] = { false, false };

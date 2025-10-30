@@ -8,7 +8,8 @@
 
 bool test_add_remove_connections()
 {
-	Arena arena = arena_create(GIGABYTE);
+	Arena arena;
+	arena_init(&arena, GIGABYTE);
 
 	// Server connections
 	PlatformSocket* socket = platform_init_server_socket(&arena);
