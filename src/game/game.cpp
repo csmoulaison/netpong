@@ -1,6 +1,4 @@
 // NOW: < LIST:
-// - Move connection acceptance/request pipeline over to the platform side of
-// things, including timeouts.
 // - Bitpacking of packets: might open up some ideas about streamlining the
 // packet stuff, who knows?
 // - Cleanup. I think it makes sense to save major cleanups for after a lot of
@@ -14,6 +12,8 @@
 // whatever stuff we get up to in the mech project, so it's not particularly
 // important. But do we want fun beeps? Maybe we want fun beeps.
 // - Advanced compression stuff for packets beyond just bitpacking.
+// - Move connection acceptance/request pipeline over to the platform side of
+// things, including timeouts.
 
 #define MENU_OPTIONS_LEN 5
 
@@ -134,32 +134,22 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 
 void render_requesting_connection_state(Game* game, Render::State* render_state, Windowing::Context* window) 
 {
-	Render::text(render_state, "Attempting to connect...", 64.0f, window->window_height - 108.0f, 1.0f, 1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
-
-	// NOW: Can we not render rects when we don't need to now?
-	for(u8 i = 0; i < 3; i++) {
-		Rect rect;
-		rect.x = -100.0f;
-		rect.y = 0.0f;
-		rect.w = 0.0f;
-		rect.h = 0.0f;
-		render_rect(render_state, rect, window);
-	}
+	Render::text(
+		render_state, 
+		"Attempting to connect...", 
+		64.0f, window->window_height - 108.0f, 
+		1.0f, 
+		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
 }
 
 void render_waiting_to_start_state(Game* game, Render::State* render_state, Windowing::Context* window) 
 {
-	Render::text(render_state, "Waiting to start...", 64.0f, window->window_height - 108.0f, 1.0f, 1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
-
-	// NOW: Can we not render rects when we don't need to now?
-	for(u8 i = 0; i < 3; i++) {
-		Rect rect;
-		rect.x = -100.0f;
-		rect.y = 0.0f;
-		rect.w = 0.0f;
-		rect.h = 0.0f;
-		render_rect(render_state, rect, window);
-	}
+	Render::text(
+		render_state, 
+		"Waiting to start...", 
+		64.0f, window->window_height - 108.0f, 
+		1.0f, 
+		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
 }
 
 void render_active_state(Game* game, Render::State* render_state, Windowing::Context* window)
@@ -251,7 +241,12 @@ void game_update(Game* game, Windowing::Context* window, Render::State* render_s
 					}
 				}
 			}
-			Render::text(render_state, strings[i], 64.0f + (32.0f * game->menu_activations[i]), window->window_height - 108.0f - (96.0f * i), 1.0f, 1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f);
+			Render::text(
+				render_state, 
+				strings[i], 
+				64.0f + (32.0f * game->menu_activations[i]), window->window_height - 108.0f - (96.0f * i), 
+				1.0f, 
+				1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f);
 		}
 
 		if(Windowing::button_pressed(window, game->select_button)) {
