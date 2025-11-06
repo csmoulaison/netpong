@@ -1,6 +1,4 @@
 // NOW: < LIST:
-// - Move connection acceptance/request pipeline over to the platform side of
-// things, including timeouts.
 // - Bitpacking of packets: might open up some ideas about streamlining the
 // packet stuff, who knows?
 // - Cleanup. I think it makes sense to save major cleanups for after a lot of
