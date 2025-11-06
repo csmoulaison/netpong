@@ -111,8 +111,9 @@ void game_init_session(Game* game, i32 config_setting, Arena* arena)
 	}
 }
 
-void render_rect(Render::State* render_state, Rect rect, Windowing::Context* window)
+void render_rect(Render::Context* renderer, Rect rect, Windowing::Context* window)
 {
+	Render::State* render_state = &renderer->current_state;
 	f32 x_scale = (f32)window->window_height / window->window_width;
 
 	Rect* rect_to_render = &render_state->rects[render_state->rects_len];
@@ -132,37 +133,29 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-void render_requesting_connection_state(Game* game, Render::State* render_state, Windowing::Context* window) 
+void render_requesting_connection_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
 {
-	Render::text(render_state, "Attempting to connect...", 64.0f, window->window_height - 108.0f, 1.0f, 1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
-
-	// NOW: Can we not render rects when we don't need to now?
-	for(u8 i = 0; i < 3; i++) {
-		Rect rect;
-		rect.x = -100.0f;
-		rect.y = 0.0f;
-		rect.w = 0.0f;
-		rect.h = 0.0f;
-		render_rect(render_state, rect, window);
-	}
+	Render::text_line(
+		renderer, 
+		"Attempting to connect...", 
+		64.0f, window->window_height - 64.0f, 
+		0.0f, 1.0f,
+		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
+		FONT_FACE_LARGE);
 }
 
-void render_waiting_to_start_state(Game* game, Render::State* render_state, Windowing::Context* window) 
+void render_waiting_to_start_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
 {
-	Render::text(render_state, "Waiting to start...", 64.0f, window->window_height - 108.0f, 1.0f, 1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f));
-
-	// NOW: Can we not render rects when we don't need to now?
-	for(u8 i = 0; i < 3; i++) {
-		Rect rect;
-		rect.x = -100.0f;
-		rect.y = 0.0f;
-		rect.w = 0.0f;
-		rect.h = 0.0f;
-		render_rect(render_state, rect, window);
-	}
+	Render::text_line(
+		renderer, 
+		"Waiting to start...", 
+		64.0f, window->window_height - 64.0f, 
+		0.0f, 1.0f,
+		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
+		FONT_FACE_LARGE);
 }
 
-void render_active_state(Game* game, Render::State* render_state, Windowing::Context* window)
+void render_active_state(Game* game, Render::Context* renderer, Windowing::Context* window)
 {
 	if(game->local_server) {
 		Server* server = game->server;
@@ -200,17 +193,17 @@ void render_active_state(Game* game, Render::State* render_state, Windowing::Con
 		paddle.y = game->visual_paddle_positions[i];
 		paddle.w = PADDLE_WIDTH;
 		paddle.h = PADDLE_HEIGHT;
-		render_rect(render_state, paddle, window);
+		render_rect(renderer, paddle, window);
 	}
 	Rect ball;
 	ball.x = game->visual_ball_position[0];
 	ball.y = game->visual_ball_position[1];
 	ball.w = BALL_WIDTH;
 	ball.h = BALL_WIDTH;
-	render_rect(render_state, ball, window);
+	render_rect(renderer, ball, window);
 }
 
-void game_update(Game* game, Windowing::Context* window, Render::State* render_state, Arena* arena)
+void game_update(Game* game, Windowing::Context* window, Render::Context* renderer, Arena* arena)
 {
 	if(game->state == GameState::Menu) {
 		if(Windowing::button_pressed(window, game->move_up_buttons[0])) {
@@ -251,7 +244,13 @@ void game_update(Game* game, Windowing::Context* window, Render::State* render_s
 					}
 				}
 			}
-			Render::text(render_state, strings[i], 64.0f + (32.0f * game->menu_activations[i]), window->window_height - 108.0f - (96.0f * i), 1.0f, 1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f);
+			Render::text_line(
+				renderer, 
+				strings[i], 
+				64.0f + (64.0f * game->menu_activations[i]), window->window_height - 64.0f - (96.0f * i), 
+				0.0f, 1.0f,
+				1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f,
+				FONT_FACE_LARGE);
 		}
 
 		if(Windowing::button_pressed(window, game->select_button)) {
@@ -284,9 +283,9 @@ void game_update(Game* game, Windowing::Context* window, Render::State* render_s
 			server_update(server, BASE_FRAME_LENGTH);
 
 			if(server_is_active(server)) {
-				render_active_state(game, render_state, window);
+				render_active_state(game, renderer, window);
 			} else {
-				render_waiting_to_start_state(game, render_state, window);
+				render_waiting_to_start_state(game, renderer, window);
 			}
 		} else { // Server is remote.
 			Client* client = game->client;
@@ -302,13 +301,13 @@ void game_update(Game* game, Windowing::Context* window, Render::State* render_s
 
 			switch(client->connection_state) {
 				case CLIENT_STATE_REQUESTING_CONNECTION:
-					render_requesting_connection_state(game, render_state, window);
+					render_requesting_connection_state(game, renderer, window);
 					break;
 				case CLIENT_STATE_WAITING_TO_START:
-					render_waiting_to_start_state(game, render_state, window);
+					render_waiting_to_start_state(game, renderer, window);
 					break;
 				case CLIENT_STATE_ACTIVE:
-					render_active_state(game, render_state, window);
+					render_active_state(game, renderer, window);
 					break;
 				default: break;
 			}
