@@ -470,8 +470,8 @@ void server_update(Server* server, f32 delta_time)
 			ClientInput event_input = {};
 			event_input.frame = server->frame;
 
-			if((i == 0 && world->ball_velocity[0] < 0.0f && world->ball_position[0] < 0.25f)
- 			|| (i == 1 && world->ball_velocity[0] > 0.0f && world->ball_position[0] > -0.25f)) {
+			if((i == 0 && world->ball_velocity[0] < 0.0f && world->ball_position[0] < 0.60f)
+ 			|| (i == 1 && world->ball_velocity[0] > 0.0f && world->ball_position[0] > -0.60f)) {
 				f32 delta_pos = world->paddle_positions[i] - world->ball_position[1];
 				if(delta_pos < -0.05f) {
 					event_input.input.move_up = 1.0f;
