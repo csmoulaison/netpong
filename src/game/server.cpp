@@ -142,7 +142,7 @@ void server_add_bot(Server* server)
 // back acceptance packets and setting the relevant slots to the PENDING
 // state, where we will wait until we receive a counter acknowledgement from the
 // new client.
-void server_handle_connection_request(Server* server, i32 connection_id)
+void server_handle_connection_request(Server* server, i32 connection_id, Arena* arena)
 {
 	ServerSlot* client;
 	i32 client_id;
@@ -181,6 +181,7 @@ void server_handle_connection_request(Server* server, i32 connection_id)
 	ServerAcceptConnectionMessage accept_message;
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
+	serialize_server_accept_connection(SerializeMode::Write, &accept_message, arena);
 	Network::send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
 	return;
 
@@ -440,13 +441,13 @@ void server_process_packets(Server* server)
 	arena_destroy(&packet_arena);
 }
 
-void server_process_events(Server* server)
+void server_process_events(Server* server, Arena* arena)
 {
 	for(u32 i = 0; i < server->events_len; i++) {
 		ServerEvent* event = &server->events[i];
 		switch(event->type) {
 			case SERVER_EVENT_CONNECTION_REQUEST:
-				server_handle_connection_request(server, event->connection_id);
+				server_handle_connection_request(server, event->connection_id, arena);
 				break;
 			case SERVER_EVENT_CLIENT_READY_TO_START:
 				server_handle_client_ready(server, event->client_id);
@@ -460,7 +461,7 @@ void server_process_events(Server* server)
 	server->events_len = 0;
 }
 
-void server_update(Server* server, f32 delta_time)
+void server_update(Server* server, f32 delta_time, Arena* arena)
 {
 	// Simulate bots
 	for(u8 i = 0; i < 2; i++) {
@@ -492,7 +493,7 @@ void server_update(Server* server, f32 delta_time)
 		server_process_packets(server);
 	}
 
-	server_process_events(server);
+	server_process_events(server, arena);
 
 #if NETWORK_SIM_MODE
 	Network::update_sim_mode(server->socket, delta_time);

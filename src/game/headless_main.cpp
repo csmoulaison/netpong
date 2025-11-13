@@ -27,7 +27,7 @@ i32 main(i32 argc, char** argv)
 	double accumulator_time = 0.0f;
 
 	while(server_close_requested(server) != true) {
-		server_update(server, delta_time);
+		server_update(server, &program_arena, delta_time);
 
 		while(accumulator_time < delta_time) {
 			double new_time = Time::seconds();

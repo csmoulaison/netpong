@@ -14,6 +14,7 @@
 #include "base/primitives.h"
 #include "base/assert.h"
 #include "base/arena.h"
+#include "base/serialize.h"
 #include "base/string.h"
 #include "base/rect.h"
 #include "base/sizes.h"

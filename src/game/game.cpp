@@ -217,13 +217,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			}
 		}
 		
-		const char* strings[MENU_OPTIONS_LEN] = {
-			"Local",
-			"Host",
-			"Join",
-			"Half bot",
-			"Full bot"
-		};
+		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot" };
 
 		for(u32 i = 0; i < MENU_OPTIONS_LEN; i++) {
 			float activator_speed = 10.0f;
@@ -278,7 +272,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					});
 				}
 			}
-			server_update(server, BASE_FRAME_LENGTH);
+			server_update(server, BASE_FRAME_LENGTH, arena);
 
 			if(server_is_active(server)) {
 				render_active_state(game, renderer, window);
