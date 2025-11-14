@@ -1,87 +1,132 @@
 #ifndef serialize_h_INCLUDED
 #define serialize_h_INCLUDED
 
-// NOW: Implement serialization on the packets, first with u32s as now, then
-// implement bit packing.
+// NOW: Implement serialization on the packet messages.
 enum class SerializeMode {
 	Write,
 	Read
 };
 
-struct BitStream {
+struct Bitstream {
 	SerializeMode mode;
-	u32* data;
-	u64 position;
+	u8* data;
+	u32 byte_offset;
+	u32 bit_offset;
 };
 
-BitStream bitstream_init(SerializeMode mode, void* data);
-void serialize_bool(BitStream* stream, bool* value, Arena* arena);
-void serialize_u8(BitStream* stream, u8* value, Arena* arena);
-void serialize_u32(BitStream* stream, u32* value, Arena* arena);
-void serialize_i32(BitStream* stream, i32* value, Arena* arena);
-void serialize_f32(BitStream* stream, f32* value, Arena* arena);
+Bitstream bitstream_init(SerializeMode mode, void* data);
+void serialize_bool(Bitstream* stream, bool* value, Arena* arena);
+void serialize_u8(Bitstream* stream, u8* value, Arena* arena);
+void serialize_u32(Bitstream* stream, u32* value, Arena* arena);
+void serialize_i32(Bitstream* stream, i32* value, Arena* arena);
+void serialize_f32(Bitstream* stream, f32* value, Arena* arena);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
-BitStream bitstream_init(SerializeMode mode, void* data) {
-	return (BitStream){ .mode = mode, .data = (u32*)data, .position = 0 };
+Bitstream bitstream_init(SerializeMode mode, void* data) {
+	return (Bitstream) { 
+		.mode = mode, 
+		.data = (u8*)data, 
+		.byte_offset = 0,
+		.bit_offset = 0
+	};
 }
 
-void bitstream_resize_arena(BitStream* stream, Arena* arena, u32 new_bits)
+void bitstream_advance_bit(u32* byte_off, u32* bit_off)
 {
-	if(stream->mode == SerializeMode::Write) {
-		u64 new_size_min = stream->position / 8 + new_bits / 8;
-		if(arena->size <= new_size_min) {
-			arena_alloc(arena, new_size_min - arena->size);
+	if(*bit_off == 7) {
+		*byte_off += 1;
+		*bit_off = 0;
+	} else {
+		*bit_off += 1;
+	}
+}
+
+// TODO: Fold this into serialize_bits function.
+void bitstream_write_bits(Bitstream* stream, u8* value, u32 size_bits, Arena* arena)
+{
+	u64 new_size_min = stream->byte_offset + size_bits / 8;
+	if(arena->size <= new_size_min) {
+		arena_alloc(arena, new_size_min - arena->size);
+	}
+
+	u32 val_byte_off = 0;
+	u32 val_bit_off = 0;
+	for(u32 i = 0; i < size_bits; i++) {
+		u8* cur_byte = &stream->data[stream->byte_offset];
+		u8 bit_to_set = 1 << stream->bit_offset;
+
+		// TODO: Found this alternative online. bit_is_set must be 0 or 1. Think
+		// about it and test after getting serialization working generally.
+		// byte = (byte & ~(1<<bit_to_set)) | (bit_is_set<<bit_to_set);
+		if(value[val_byte_off] & 1 << val_bit_off) {
+			*cur_byte |= bit_to_set;
+		} else {
+			*cur_byte &= ~bit_to_set;
 		}
+
+		bitstream_advance_bit(&val_byte_off, &val_bit_off);
+		bitstream_advance_bit(&stream->byte_offset, &stream->bit_offset);
 	}
 }
 
-void serialize_bool(BitStream* stream, bool* value, Arena* arena)
+void bitstream_read_bits(Bitstream* stream, u8* value, u32 size_bits)
 {
-	bitstream_resize_arena(stream, arena, sizeof(u32));
-	if(stream->mode == SerializeMode::Write) {
-		stream->data[stream->position] = (u32)*value;
-	} else { // Read
-		*value = (bool)stream->data[stream->position];
+	*value = 0;
+
+	u32 val_byte_off = 0;
+	u32 val_bit_off = 0;
+	for(u32 i = 0; i < size_bits; i++) {
+		u8* cur_byte = &value[val_byte_off];
+		u8 bit_to_set = 1 << val_bit_off;
+
+		if(stream->data[stream->byte_offset] & 1 << stream->bit_offset) {
+			*cur_byte |= bit_to_set;
+		} else {
+			*cur_byte &= ~bit_to_set;
+		}
+
+		bitstream_advance_bit(&val_byte_off, &val_bit_off);
+		bitstream_advance_bit(&stream->byte_offset, &stream->bit_offset);
 	}
 }
 
-void serialize_u8(BitStream* stream, u8* value, Arena* arena)
+void serialize_bits(Bitstream* stream, u8* value, u32 size_bits, Arena* arena)
 {
-	bitstream_resize_arena(stream, arena, sizeof(u32));
+	strict_assert(
+		(arena == nullptr && stream->mode == SerializeMode::Write) || 
+		(arena != nullptr && stream->mode == SerializeMode::Read));
+
 	if(stream->mode == SerializeMode::Write) {
-		stream->data[stream->position] = (u32)*value;
-	} else { // Read
-		*value = (u8)stream->data[stream->position];
+		bitstream_write_bits(stream, value, 1, arena);
+	} else {
+		bitstream_read_bits(stream, value, 1);
 	}
 }
 
-void serialize_u32(BitStream* stream, u32* value, Arena* arena)
+void serialize_bool(Bitstream* stream, bool* value, Arena* arena)
 {
-	if(stream->mode == SerializeMode::Write) {
-		stream->data[stream->position] = *value;
-	} else { // Read
-		*value = stream->data[stream->position];
-	}
+	serialize_bits(stream, (u8*)value, 1, arena);
 }
 
-void serialize_i32(BitStream* stream, i32* value, Arena* arena)
+void serialize_u8(Bitstream* stream, u8* value, Arena* arena)
 {
-	if(stream->mode == SerializeMode::Write) {
-		stream->data[stream->position] = (u32)*value;
-	} else { // Read
-		*value = (i32)stream->data[stream->position];
-	}
+	serialize_bits(stream, (u8*)value, 8, arena);
 }
 
-void serialize_f32(BitStream* stream, f32* value, Arena* arena)
+void serialize_u32(Bitstream* stream, u32* value, Arena* arena)
 {
-	if(stream->mode == SerializeMode::Write) {
-		stream->data[stream->position] = (u32)*value;
-	} else { // Read
-		*value = (f32)stream->data[stream->position];
-	}
+	serialize_bits(stream, (u8*)value, 32, arena);
+}
+
+void serialize_i32(Bitstream* stream, i32* value, Arena* arena)
+{
+	serialize_bits(stream, (u8*)value, 32, arena);
+}
+
+void serialize_f32(Bitstream* stream, f32* value, Arena* arena)
+{
+	serialize_bits(stream, (u8*)value, 32, arena);
 }
 
 #endif // CSM_BASE_IMPLEMENTATION

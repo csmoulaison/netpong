@@ -56,22 +56,10 @@ struct ServerAcceptConnectionMessage {
 // won't be referenced at all if we are in reading mode.
 u64 serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
 {
-	strict_assert(
-		(arena == nullptr && mode == SerializeMode::Write) || 
-		(arena != nullptr && mode == SerializeMode::Read));
-
-	u64 bytes_read_or_written;
-	if(mode == SerializeMode::Write) {
-		bytes_read_or_written = 0;
-	} else {
-		bytes_read_or_written = sizeof(ServerAcceptConnectionMessage);
-	}
-
-	BitStream stream = bitstream_init(mode, data);
+	Bitstream stream = bitstream_init(mode, data);
 	serialize_u32(&stream, &data->type, arena);
 	serialize_u8(&stream, &data->client_id, arena);
-
-	return bytes_read_or_written;
+	return stream.byte_offset + 1;
 }
 
 
