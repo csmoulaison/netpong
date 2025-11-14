@@ -289,7 +289,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 				client->events_len++;
 			}
-			client_update(client);
+			client_update(client, arena);
 
 			switch(client->connection_state) {
 				case CLIENT_STATE_REQUESTING_CONNECTION:

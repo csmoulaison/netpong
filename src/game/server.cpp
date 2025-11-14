@@ -146,6 +146,7 @@ void server_handle_connection_request(Server* server, i32 connection_id, Arena* 
 {
 	ServerSlot* client;
 	i32 client_id;
+	SerializeResult serialized;
 
 	if(connection_id > 1) {
 		printf("Server: Rejecting connection because the connection_id is > 1.\n");
@@ -181,8 +182,9 @@ void server_handle_connection_request(Server* server, i32 connection_id, Arena* 
 	ServerAcceptConnectionMessage accept_message;
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
-	serialize_server_accept_connection(SerializeMode::Write, &accept_message, arena);
-	Network::send_packet(server->socket, connection_id, (void*)&accept_message, sizeof(accept_message));
+
+	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, arena);
+	Network::send_packet(server->socket, connection_id, serialized.data, serialized.size_bytes);
 	return;
 
 reject_connection_request:
@@ -271,7 +273,7 @@ void server_update_idle(Server* server, f32 dt)
 	}
 }
 
-void server_update_active(Server* server, f32 delta_time)
+void server_update_active(Server* server, f32 delta_time, Arena* arena)
 {
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
@@ -386,6 +388,8 @@ void server_update_active(Server* server, f32 delta_time)
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 		if(client->type == SERVER_PLAYER_REMOTE) {
+			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, arena);
+			
 			Network::send_packet(server->socket, client->connection_id, &update_message, sizeof(update_message));
 		}
 	}
@@ -500,7 +504,7 @@ void server_update(Server* server, f32 delta_time, Arena* arena)
 #endif
 
 	if(server_is_active(server)) {
-		server_update_active(server, delta_time);
+		server_update_active(server, delta_time, arena);
 	} else {
 		server_update_idle(server, delta_time);
 	}

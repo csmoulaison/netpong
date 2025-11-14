@@ -1,10 +1,14 @@
-// NOW: Write a detailed description of the inner machinations of this file.
-// It's going to be one we forget. 
+struct SerializeResult {
+	u64 size_bytes;
+	void* data;
+};
 
-// Serialization functions, by convention:
-// - ~~Take either an arena for write mode, or a data pointer for read mode. The
-// one not used by the given mode should be left null.~~
-// - Return a SerializeResult containing the size in bytes and the packed data.
+SerializeResult serialize_empty_typed_message(SerializeMode mode, void* type, Arena* arena)
+{
+	Bitstream stream = bitstream_init(mode, type);
+	serialize_u32(&stream, (u32*)type, arena);
+	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+}
  
 // Client messages
 enum MessageType {
@@ -42,6 +46,20 @@ struct ClientInputMessage {
 	bool input_moves_down[INPUT_WINDOW_FRAMES];
 };
 
+SerializeResult serialize_client_input_message(SerializeMode mode, ClientInputMessage* data, Arena* arena)
+{
+	Bitstream stream = bitstream_init(mode, data);
+	serialize_u32(&stream, &data->type, arena);
+	serialize_i32(&stream, &data->latest_frame, arena);
+	serialize_i32(&stream, &data->oldest_frame, arena);
+	for(i32 i = 0; i < INPUT_WINDOW_FRAMES; i++) {
+		serialize_bool(&stream, &data->input_moves_up[i], arena);
+		serialize_bool(&stream, &data->input_moves_down[i], arena);
+	}
+
+	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+}
+
 
 // ServerAcceptConnectionMessage 
 struct ServerAcceptConnectionMessage {
@@ -49,17 +67,12 @@ struct ServerAcceptConnectionMessage {
 	u8 client_id;
 };
 
-// NOW: The arena is ONLY used to allocate more space for the void pointer IN
-// THE CASE OF WRITING, and shall go unused in the case of reading. The
-// serialize_x functions take the arena in order to perform this function. This
-// means in the case of reading, the arena can be passed as a nullptr, as it
-// won't be referenced at all if we are in reading mode.
-u64 serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
+SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
 {
 	Bitstream stream = bitstream_init(mode, data);
 	serialize_u32(&stream, &data->type, arena);
 	serialize_u8(&stream, &data->client_id, arena);
-	return stream.byte_offset + 1;
+	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
 }
 
 
@@ -87,6 +100,46 @@ struct ServerWorldUpdateMessage {
 	World world;
 	i32 frame;
 };
+
+// NOW: This isn't working at the moment. For some reason, implementing it led
+// to the joining client stuck on "Waiting to start..." (no start game message?)
+// 
+// We want to get this to work, and then finish implementing both receive and
+// send message packing.
+// 
+// After, we want to change all these references to the arenas to be clearly
+// referencing a sub-arena which is only for packet sending. We need to finally
+// get sub-allocation set up for arenas so we can have some static memory we
+// clear after every frame. Really, just a transient sub-arena would work just
+// fine and allow us to use it for all sort of other stuff too at the same time
+// without being in a situation where we have a billion arenas being passed
+// around.
+SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* data, Arena* arena)
+{
+	Bitstream stream = bitstream_init(mode, data);
+	serialize_u32(&stream, &data->type, arena);
+
+	// Eventually, this becomes a serialize_world function, or something.
+	serialize_f32(&stream, &data->world.countdown_to_start, arena);
+
+	serialize_f32(&stream, &data->world.ball_position[0], arena);
+	serialize_f32(&stream, &data->world.ball_position[1], arena);
+	serialize_f32(&stream, &data->world.ball_velocity[0], arena);
+	serialize_f32(&stream, &data->world.ball_velocity[1], arena);
+
+	serialize_f32(&stream, &data->world.paddle_positions[0], arena);
+	serialize_f32(&stream, &data->world.paddle_positions[1], arena);
+	serialize_f32(&stream, &data->world.paddle_velocities[0], arena);
+	serialize_f32(&stream, &data->world.paddle_velocities[1], arena);
+
+	serialize_f32(&stream, &data->world.player_inputs[0].move_up, arena);
+	serialize_f32(&stream, &data->world.player_inputs[0].move_down, arena);
+	serialize_f32(&stream, &data->world.player_inputs[1].move_up, arena);
+	serialize_f32(&stream, &data->world.player_inputs[1].move_down, arena);
+
+	serialize_i32(&stream, &data->frame, arena);
+	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+}
 
 
 // TODO: Add frame to these so the client can tell whether they have already

@@ -176,6 +176,7 @@ void client_simulate_and_advance_frame(Client* client)
 		input_message.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
 	}
 
+	//SerializeResult serialized = serialize_client_input_message(SerializeMode::Write
 	Network::send_packet(client->socket, 0, &input_message, sizeof(input_message));
 
 	client->frame++;
@@ -294,7 +295,7 @@ void client_update_active(Client* client)
 	client_simulate_and_advance_frame(client);
 }
 
-void client_process_packets(Client* client)
+void client_process_packets(Client* client, Arena* arena)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena;
@@ -305,24 +306,30 @@ void client_process_packets(Client* client)
 		u8 type = *(u8*)packet->data;
 		void* data = packet->data;
 
+		ServerWorldUpdateMessage world_update_message;
+		ServerAcceptConnectionMessage accept_connection_message;
+
 		// Variables used in the switch statement.
 		ClientWorldState update_state;
 
+		// NOW: Use serialization functions for all messages.
 		switch(type) {
 			case SERVER_MESSAGE_WORLD_UPDATE:
+				serialize_server_world_update(SerializeMode::Read, &world_update_message, arena);
 				assert(client != nullptr);
-				update_state.world = ((ServerWorldUpdateMessage*)data)->world;
-				update_state.frame = ((ServerWorldUpdateMessage*)data)->frame;
+				update_state.world = world_update_message.world;
+				update_state.frame = world_update_message.frame;
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_WORLD_UPDATE, 
 					.world_update = update_state 
 				}); 
 				break;
 			case SERVER_MESSAGE_ACCEPT_CONNECTION:
+				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, arena);
 				assert(client != nullptr);
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
-					.assigned_id = ((ServerAcceptConnectionMessage*)data)->client_id 
+					.assigned_id = accept_connection_message.client_id 
 				});
 				break;
 			case SERVER_MESSAGE_END_GAME:
@@ -385,9 +392,9 @@ void client_process_events(Client* client)
 	client->events_len = 0;
 }
 
-void client_update(Client* client) 
+void client_update(Client* client, Arena* arena) 
 {
-	client_process_packets(client);
+	client_process_packets(client, arena);
 	client_process_events(client);
 
 #if NETWORK_SIM_MODE
