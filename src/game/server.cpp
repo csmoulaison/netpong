@@ -142,7 +142,7 @@ void server_add_bot(Server* server)
 // back acceptance packets and setting the relevant slots to the PENDING
 // state, where we will wait until we receive a counter acknowledgement from the
 // new client.
-void server_handle_connection_request(Server* server, i32 connection_id, Arena* arena)
+void server_handle_connection_request(Server* server, i32 connection_id, Arena* transient_arena)
 {
 	ServerSlot* client;
 	i32 client_id;
@@ -183,7 +183,7 @@ void server_handle_connection_request(Server* server, i32 connection_id, Arena* 
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
 
-	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, arena);
+	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, transient_arena);
 	Network::send_packet(server->socket, connection_id, serialized.data, serialized.size_bytes);
 	return;
 
@@ -273,7 +273,7 @@ void server_update_idle(Server* server, f32 dt)
 	}
 }
 
-void server_update_active(Server* server, f32 delta_time, Arena* arena)
+void server_update_active(Server* server, f32 delta_time, Arena* transient_arena)
 {
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
@@ -291,10 +291,10 @@ void server_update_active(Server* server, f32 delta_time, Arena* arena)
 			// If we haven't received any input yet, keep telling the client that the game
 			// has started, and break from the loop here.
 			if(latest_frame_received == -1) {
-				ServerStartGameMessage start_message;
-				start_message.type = SERVER_MESSAGE_START_GAME;
-				Network::send_packet(server->socket, client->connection_id, (void*)&start_message, sizeof(start_message));
-				printf("Server: Sent start game packet to client %u.\n", i);
+				//ServerStartGameMessage start_message;
+				//start_message.type = SERVER_MESSAGE_START_GAME;
+				//Network::send_packet(server->socket, client->connection_id, (void*)&start_message, sizeof(start_message));
+				//printf("Server: Sent start game packet to client %u.\n", i);
 				continue;
 			// Client speed up if the server is too far ahead, client slow down if the
 			// server is too far behind.
@@ -388,9 +388,14 @@ void server_update_active(Server* server, f32 delta_time, Arena* arena)
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 		if(client->type == SERVER_PLAYER_REMOTE) {
-			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, arena);
+			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, transient_arena);
+
+			// This is returning the wrong thing.
+			ServerWorldUpdateMessage returned;
+			serialize_server_world_update(SerializeMode::Read, &returned, nullptr);
+			printf("update frame SERIALIZED: %i\n", returned.frame);
 			
-			Network::send_packet(server->socket, client->connection_id, &update_message, sizeof(update_message));
+			Network::send_packet(server->socket, client->connection_id, serialized.data, serialized.size_bytes);
 		}
 	}
 
@@ -445,13 +450,13 @@ void server_process_packets(Server* server)
 	arena_destroy(&packet_arena);
 }
 
-void server_process_events(Server* server, Arena* arena)
+void server_process_events(Server* server, Arena* transient_arena)
 {
 	for(u32 i = 0; i < server->events_len; i++) {
 		ServerEvent* event = &server->events[i];
 		switch(event->type) {
 			case SERVER_EVENT_CONNECTION_REQUEST:
-				server_handle_connection_request(server, event->connection_id, arena);
+				server_handle_connection_request(server, event->connection_id, transient_arena);
 				break;
 			case SERVER_EVENT_CLIENT_READY_TO_START:
 				server_handle_client_ready(server, event->client_id);
@@ -465,7 +470,7 @@ void server_process_events(Server* server, Arena* arena)
 	server->events_len = 0;
 }
 
-void server_update(Server* server, f32 delta_time, Arena* arena)
+void server_update(Server* server, f32 delta_time)
 {
 	// Simulate bots
 	for(u8 i = 0; i < 2; i++) {
@@ -493,21 +498,26 @@ void server_update(Server* server, f32 delta_time, Arena* arena)
 		}
 	}
 
+	Arena transient_arena;
+	arena_init(&transient_arena, 32000);
+
 	if(server->socket != nullptr) {
 		server_process_packets(server);
 	}
 
-	server_process_events(server, arena);
+	server_process_events(server, &transient_arena);
 
 #if NETWORK_SIM_MODE
 	Network::update_sim_mode(server->socket, delta_time);
 #endif
 
 	if(server_is_active(server)) {
-		server_update_active(server, delta_time, arena);
+		server_update_active(server, delta_time, &transient_arena);
 	} else {
 		server_update_idle(server, delta_time);
 	}
+
+	arena_destroy(&transient_arena);
 }
 
 bool server_close_requested(Server* server)

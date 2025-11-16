@@ -16,7 +16,6 @@ enum MessageType {
 	CLIENT_MESSAGE_READY_TO_START,
 	CLIENT_MESSAGE_INPUT,
 	SERVER_MESSAGE_ACCEPT_CONNECTION,
-	SERVER_MESSAGE_START_GAME,
 	SERVER_MESSAGE_END_GAME,
 	SERVER_MESSAGE_DISCONNECT,
 	SERVER_MESSAGE_WORLD_UPDATE,
@@ -70,16 +69,11 @@ struct ServerAcceptConnectionMessage {
 SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
 {
 	Bitstream stream = bitstream_init(mode, data);
-	serialize_u32(&stream, &data->type, arena);
+	u32 type = SERVER_MESSAGE_ACCEPT_CONNECTION;
+	serialize_u32(&stream, &type, arena);
 	serialize_u8(&stream, &data->client_id, arena);
 	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
 }
-
-
-// ServerStartGameMessage 
-struct ServerStartGameMessage {
-	u32 type;
-};
 
 
 // ServerEndGameMessage 
@@ -97,8 +91,8 @@ struct ServerDisconnectMessage {
 // ServerWorldUpdateMessage 
 struct ServerWorldUpdateMessage {
 	u32 type;
-	World world;
 	i32 frame;
+	World world;
 };
 
 // NOW: This isn't working at the moment. For some reason, implementing it led
@@ -116,8 +110,45 @@ struct ServerWorldUpdateMessage {
 // around.
 SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* data, Arena* arena)
 {
+	// NOW: This is only temporary to figure out where things are going wrong.
+	// NOW: This is ending up as 32,765 on read after 0 on write on server side.
+	//      (i32 limit = 32,767)
+	//
+	// Output when individual serialize_x are used (serialize_write, serialize_read, server.cpp:396):
+	// Data frame: 253
+	// Data frame: 32706
+	// update frame SERIALIZED: 32512
+	// 
+	// Next frame:
+	// Data frame: 254
+	// Data frame: 32706
+	// update frame SERIALIZED: 32512
+	//
+	// Data frame on write goes up, on read stays the same, and update frame read
+	// from serializer is fucking wrong as well.
+
+	printf("Data frame: %i\n", data->frame);
+	//assert(data->frame < 10000);
+
 	Bitstream stream = bitstream_init(mode, data);
-	serialize_u32(&stream, &data->type, arena);
+
+	// NOW: We are trying serializing the whole damn thing for kicks.
+	serialize_bits(&stream, (u8*)data, sizeof(ServerWorldUpdateMessage), arena);
+
+	// Output when serialize_bits is used:
+	// Data frame: 173
+	// Data frame: 32696
+	// update frame SERIALIZED: 32696
+	// NEXT
+	// Data frame: 174
+	// Data frame: 32696
+	// update frame SERIALIZED: 32696
+
+
+	/*
+	u32 type = SERVER_MESSAGE_WORLD_UPDATE;
+	serialize_u32(&stream, &type, arena);
+	serialize_i32(&stream, &data->frame, arena);
 
 	// Eventually, this becomes a serialize_world function, or something.
 	serialize_f32(&stream, &data->world.countdown_to_start, arena);
@@ -136,8 +167,8 @@ SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpd
 	serialize_f32(&stream, &data->world.player_inputs[0].move_down, arena);
 	serialize_f32(&stream, &data->world.player_inputs[1].move_up, arena);
 	serialize_f32(&stream, &data->world.player_inputs[1].move_down, arena);
+	*/
 
-	serialize_i32(&stream, &data->frame, arena);
 	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
 }
 

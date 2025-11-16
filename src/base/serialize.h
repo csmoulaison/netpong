@@ -34,15 +34,21 @@ Bitstream bitstream_init(SerializeMode mode, void* data) {
 
 void bitstream_advance_bit(u32* byte_off, u32* bit_off)
 {
+	u32 original_bit = *bit_off;
+	u32 original_byte = *byte_off;
+	
 	if(*bit_off == 7) {
 		*byte_off += 1;
 		*bit_off = 0;
 	} else {
 		*bit_off += 1;
 	}
+
+	assert(*bit_off == 0 || *bit_off == original_bit + 1);
+	assert(*byte_off == original_byte || *byte_off == original_byte + 1);
 }
 
-// TODO: Fold this into serialize_bits function.
+// TODO: Fold this into serialize_bits function if reasonable.
 void bitstream_write_bits(Bitstream* stream, u8* value, u32 size_bits, Arena* arena)
 {
 	u64 new_size_min = stream->byte_offset + size_bits / 8;
@@ -98,9 +104,9 @@ void serialize_bits(Bitstream* stream, u8* value, u32 size_bits, Arena* arena)
 		(arena != nullptr && stream->mode == SerializeMode::Read));
 
 	if(stream->mode == SerializeMode::Write) {
-		bitstream_write_bits(stream, value, 1, arena);
+		bitstream_write_bits(stream, value, size_bits, arena);
 	} else {
-		bitstream_read_bits(stream, value, 1);
+		bitstream_read_bits(stream, value, size_bits);
 	}
 }
 
@@ -126,7 +132,9 @@ void serialize_i32(Bitstream* stream, i32* value, Arena* arena)
 
 void serialize_f32(Bitstream* stream, f32* value, Arena* arena)
 {
+	//printf("fuckin!\n");
 	serialize_bits(stream, (u8*)value, 32, arena);
+	//printf("fucked!\n");
 }
 
 #endif // CSM_BASE_IMPLEMENTATION

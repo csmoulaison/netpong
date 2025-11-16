@@ -18,7 +18,6 @@ struct ClientWorldState {
 // side, as the client is never receiving messages from a local source, but it
 // will likely be useful for testing and the like.
 enum ClientEventType {
-	CLIENT_EVENT_START_GAME,
 	CLIENT_EVENT_END_GAME,
 	CLIENT_EVENT_CONNECTION_ACCEPTED,
 	CLIENT_EVENT_DISCONNECT,
@@ -197,6 +196,8 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state)
 	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
 
 	if(update_state->frame != update_frame) {
+		assert(update_frame - client->frame < 100);
+
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 		while(client->frame < update_frame + 1) {
 			client_simulate_and_advance_frame(client);
@@ -295,7 +296,7 @@ void client_update_active(Client* client)
 	client_simulate_and_advance_frame(client);
 }
 
-void client_process_packets(Client* client, Arena* arena)
+void client_process_packets(Client* client)
 {
 	// TODO: Allocate arena from existing arena.
 	Arena packet_arena;
@@ -303,7 +304,7 @@ void client_process_packets(Client* client, Arena* arena)
 	Network::Packet* packet = Network::receive_packets(client->socket, &packet_arena);
 
 	while(packet != nullptr) {
-		u8 type = *(u8*)packet->data;
+		u32 type = *(u32*)packet->data;
 		void* data = packet->data;
 
 		ServerWorldUpdateMessage world_update_message;
@@ -315,7 +316,13 @@ void client_process_packets(Client* client, Arena* arena)
 		// NOW: Use serialization functions for all messages.
 		switch(type) {
 			case SERVER_MESSAGE_WORLD_UPDATE:
-				serialize_server_world_update(SerializeMode::Read, &world_update_message, arena);
+				serialize_server_world_update(SerializeMode::Read, &world_update_message, nullptr);
+
+				printf("WUPD: frame %i, ball %f %f\n", 
+					world_update_message.frame,
+					world_update_message.world.ball_position[0],
+					world_update_message.world.ball_position[1]);
+				
 				assert(client != nullptr);
 				update_state.world = world_update_message.world;
 				update_state.frame = world_update_message.frame;
@@ -325,7 +332,7 @@ void client_process_packets(Client* client, Arena* arena)
 				}); 
 				break;
 			case SERVER_MESSAGE_ACCEPT_CONNECTION:
-				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, arena);
+				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, nullptr);
 				assert(client != nullptr);
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
@@ -392,9 +399,12 @@ void client_process_events(Client* client)
 	client->events_len = 0;
 }
 
-void client_update(Client* client, Arena* arena) 
+void client_update(Client* client) 
 {
-	client_process_packets(client, arena);
+	Arena transient_arena;
+	arena_init(&transient_arena, 32000);
+	
+	client_process_packets(client);
 	client_process_events(client);
 
 #if NETWORK_SIM_MODE
@@ -416,5 +426,7 @@ void client_update(Client* client, Arena* arena)
 			break;
 		default: break;
 	}
+
+	arena_destroy(&transient_arena);
 }
 

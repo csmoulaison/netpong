@@ -272,7 +272,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					});
 				}
 			}
-			server_update(server, BASE_FRAME_LENGTH, arena);
+			server_update(server, BASE_FRAME_LENGTH);
 
 			if(server_is_active(server)) {
 				render_active_state(game, renderer, window);
@@ -289,7 +289,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 				client->events_len++;
 			}
-			client_update(client, arena);
+			client_update(client);
 
 			switch(client->connection_state) {
 				case CLIENT_STATE_REQUESTING_CONNECTION:
