@@ -390,10 +390,10 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 		if(client->type == SERVER_PLAYER_REMOTE) {
 			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, transient_arena);
 
-			// This is returning the wrong thing.
+			// Okay, the damn thing doesn't even seem to be being written to.
 			ServerWorldUpdateMessage returned;
 			serialize_server_world_update(SerializeMode::Read, &returned, nullptr);
-			printf("update frame SERIALIZED: %i\n", returned.frame);
+			//printf("update frame SERIALIZED: %i\n", returned.frame);
 			
 			Network::send_packet(server->socket, client->connection_id, serialized.data, serialized.size_bytes);
 		}

@@ -1,13 +1,8 @@
-struct SerializeResult {
-	u64 size_bytes;
-	void* data;
-};
-
 SerializeResult serialize_empty_typed_message(SerializeMode mode, void* type, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, type);
-	serialize_u32(&stream, (u32*)type, arena);
-	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+	Bitstream stream = bitstream_init(mode, (char*)type, arena);
+	serialize_u32(&stream, (u32*)type);
+	return serialize_result(&stream);
 }
  
 // Client messages
@@ -47,16 +42,15 @@ struct ClientInputMessage {
 
 SerializeResult serialize_client_input_message(SerializeMode mode, ClientInputMessage* data, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, data);
-	serialize_u32(&stream, &data->type, arena);
-	serialize_i32(&stream, &data->latest_frame, arena);
-	serialize_i32(&stream, &data->oldest_frame, arena);
+	Bitstream stream = bitstream_init(mode, (char*)data, arena);
+	serialize_u32(&stream, &data->type);
+	serialize_i32(&stream, &data->latest_frame);
+	serialize_i32(&stream, &data->oldest_frame);
 	for(i32 i = 0; i < INPUT_WINDOW_FRAMES; i++) {
-		serialize_bool(&stream, &data->input_moves_up[i], arena);
-		serialize_bool(&stream, &data->input_moves_down[i], arena);
+		serialize_bool(&stream, &data->input_moves_up[i]);
+		serialize_bool(&stream, &data->input_moves_down[i]);
 	}
-
-	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+	return serialize_result(&stream);
 }
 
 
@@ -68,11 +62,11 @@ struct ServerAcceptConnectionMessage {
 
 SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, data);
+	Bitstream stream = bitstream_init(mode, (char*)data, arena);
 	u32 type = SERVER_MESSAGE_ACCEPT_CONNECTION;
-	serialize_u32(&stream, &type, arena);
-	serialize_u8(&stream, &data->client_id, arena);
-	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+	serialize_u32(&stream, &type);
+	serialize_u8(&stream, &data->client_id);
+	return serialize_result(&stream);
 }
 
 
@@ -108,68 +102,36 @@ struct ServerWorldUpdateMessage {
 // fine and allow us to use it for all sort of other stuff too at the same time
 // without being in a situation where we have a billion arenas being passed
 // around.
-SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* data, Arena* arena)
+SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* message, Arena* arena)
 {
-	// NOW: This is only temporary to figure out where things are going wrong.
-	// NOW: This is ending up as 32,765 on read after 0 on write on server side.
-	//      (i32 limit = 32,767)
-	//
-	// Output when individual serialize_x are used (serialize_write, serialize_read, server.cpp:396):
-	// Data frame: 253
-	// Data frame: 32706
-	// update frame SERIALIZED: 32512
-	// 
-	// Next frame:
-	// Data frame: 254
-	// Data frame: 32706
-	// update frame SERIALIZED: 32512
-	//
-	// Data frame on write goes up, on read stays the same, and update frame read
-	// from serializer is fucking wrong as well.
-
-	printf("Data frame: %i\n", data->frame);
-	//assert(data->frame < 10000);
-
-	Bitstream stream = bitstream_init(mode, data);
+	Bitstream stream = bitstream_init(mode, (char*)message, arena);
 
 	// NOW: We are trying serializing the whole damn thing for kicks.
-	serialize_bits(&stream, (u8*)data, sizeof(ServerWorldUpdateMessage), arena);
+	serialize_bits(&stream, (char*)message, sizeof(ServerWorldUpdateMessage) * 8);
 
-	// Output when serialize_bits is used:
-	// Data frame: 173
-	// Data frame: 32696
-	// update frame SERIALIZED: 32696
-	// NEXT
-	// Data frame: 174
-	// Data frame: 32696
-	// update frame SERIALIZED: 32696
-
-
-	/*
-	u32 type = SERVER_MESSAGE_WORLD_UPDATE;
-	serialize_u32(&stream, &type, arena);
-	serialize_i32(&stream, &data->frame, arena);
+	//u32 type = SERVER_MESSAGE_WORLD_UPDATE;
+	//serialize_u32(&stream, &type);
+	//serialize_i32(&stream, &message->frame);
 
 	// Eventually, this becomes a serialize_world function, or something.
-	serialize_f32(&stream, &data->world.countdown_to_start, arena);
+	//serialize_f32(&stream, &message->world.countdown_to_start);
 
-	serialize_f32(&stream, &data->world.ball_position[0], arena);
-	serialize_f32(&stream, &data->world.ball_position[1], arena);
-	serialize_f32(&stream, &data->world.ball_velocity[0], arena);
-	serialize_f32(&stream, &data->world.ball_velocity[1], arena);
+	//serialize_f32(&stream, &message->world.ball_position[0]);
+	//serialize_f32(&stream, &message->world.ball_position[1]);
+	//serialize_f32(&stream, &message->world.ball_velocity[0]);
+	//serialize_f32(&stream, &message->world.ball_velocity[1]);
 
-	serialize_f32(&stream, &data->world.paddle_positions[0], arena);
-	serialize_f32(&stream, &data->world.paddle_positions[1], arena);
-	serialize_f32(&stream, &data->world.paddle_velocities[0], arena);
-	serialize_f32(&stream, &data->world.paddle_velocities[1], arena);
+	//serialize_f32(&stream, &message->world.paddle_positions[0]);
+	//serialize_f32(&stream, &message->world.paddle_positions[1]);
+	//serialize_f32(&stream, &message->world.paddle_velocities[0]);
+	//serialize_f32(&stream, &message->world.paddle_velocities[1]);
 
-	serialize_f32(&stream, &data->world.player_inputs[0].move_up, arena);
-	serialize_f32(&stream, &data->world.player_inputs[0].move_down, arena);
-	serialize_f32(&stream, &data->world.player_inputs[1].move_up, arena);
-	serialize_f32(&stream, &data->world.player_inputs[1].move_down, arena);
-	*/
+	//serialize_f32(&stream, &message->world.player_inputs[0].move_up);
+	//serialize_f32(&stream, &message->world.player_inputs[0].move_down);
+	//serialize_f32(&stream, &message->world.player_inputs[1].move_up);
+	//serialize_f32(&stream, &message->world.player_inputs[1].move_down);
 
-	return (SerializeResult) { .size_bytes = stream.byte_offset + 1, .data = stream.data };
+	return serialize_result(&stream);
 }
 
 

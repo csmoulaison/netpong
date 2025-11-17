@@ -6,19 +6,20 @@
 struct Arena {
 	u64 index;
 	u64 size;
-	u8* data;
+	char* data;
 	bool initialized;
 };
 
 void arena_init(Arena* arena, u64 size);
 void arena_destroy(Arena* arena);
 void* arena_alloc(Arena* arena, u64 size);
+void* arena_head(Arena* arena);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
 void arena_init(Arena* arena, u64 size)
 {
-	arena->data = (u8*)malloc(size);
+	arena->data = (char*)malloc(size);
 	arena->index = 0;
 	arena->size = 0;
 	arena->initialized = true;
