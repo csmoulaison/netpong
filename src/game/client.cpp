@@ -316,13 +316,8 @@ void client_process_packets(Client* client)
 		// NOW: Use serialization functions for all messages.
 		switch(type) {
 			case SERVER_MESSAGE_WORLD_UPDATE:
-				serialize_server_world_update(SerializeMode::Read, &world_update_message, nullptr);
-
-				printf("WUPD: frame %i, ball %f %f\n", 
-					world_update_message.frame,
-					world_update_message.world.ball_position[0],
-					world_update_message.world.ball_position[1]);
-				
+				serialize_server_world_update(SerializeMode::Read, &world_update_message, (char*)data, nullptr);
+		
 				assert(client != nullptr);
 				update_state.world = world_update_message.world;
 				update_state.frame = world_update_message.frame;
@@ -332,7 +327,7 @@ void client_process_packets(Client* client)
 				}); 
 				break;
 			case SERVER_MESSAGE_ACCEPT_CONNECTION:
-				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, nullptr);
+				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, (char*)packet->data, nullptr);
 				assert(client != nullptr);
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 

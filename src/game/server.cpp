@@ -183,7 +183,7 @@ void server_handle_connection_request(Server* server, i32 connection_id, Arena* 
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
 
-	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, transient_arena);
+	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, nullptr, transient_arena);
 	Network::send_packet(server->socket, connection_id, serialized.data, serialized.size_bytes);
 	return;
 
@@ -388,11 +388,11 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 		if(client->type == SERVER_PLAYER_REMOTE) {
-			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, transient_arena);
+			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, nullptr, transient_arena);
 
 			// Okay, the damn thing doesn't even seem to be being written to.
-			ServerWorldUpdateMessage returned;
-			serialize_server_world_update(SerializeMode::Read, &returned, nullptr);
+			//ServerWorldUpdateMessage returned = {};
+			//serialize_server_world_update(SerializeMode::Read, &returned, serialized.data, nullptr);
 			//printf("update frame SERIALIZED: %i\n", returned.frame);
 			
 			Network::send_packet(server->socket, client->connection_id, serialized.data, serialized.size_bytes);

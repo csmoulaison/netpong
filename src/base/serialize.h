@@ -38,10 +38,10 @@ void serialize_f32(Bitstream* stream, f32* value);
 #ifdef CSM_BASE_IMPLEMENTATION
 
 // NOW: NOW: Okay so we are trying 'data' just being 1 thing.
-// When writing: 'data' is what we are packing into.
-// When reading: 'data' is the unpacked data that we are reading from.
+// When writing: 'data' is the arena we are packing into.
+// When reading: 'data' is the packed data that we are reading from.
 // 
-// The 'data' argument is ignored in read mode, and the current arena head is
+// The 'data' argument is ignored in write mode, and the current arena head is
 // used instead.
 Bitstream bitstream_init(SerializeMode mode, char* data, Arena* arena)
 {
@@ -52,7 +52,7 @@ Bitstream bitstream_init(SerializeMode mode, char* data, Arena* arena)
 		.mode = mode, 
 		.byte_offset = 0,
 		.bit_offset = 0,
-		.arena = arena
+		.arena = arena,
 	};
 	if(stream.mode == SerializeMode::Write) {
 		stream.data = (char*)arena_head(arena);

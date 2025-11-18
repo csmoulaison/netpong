@@ -60,12 +60,14 @@ struct ServerAcceptConnectionMessage {
 	u8 client_id;
 };
 
-SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* data, Arena* arena)
+SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* message, char* data, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, (char*)data, arena);
+	Bitstream stream = bitstream_init(mode, data, arena);
+	//serialize_bits(&stream, (char*)message, sizeof(ServerWorldUpdateMessage) * 8);
+
 	u32 type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	serialize_u32(&stream, &type);
-	serialize_u8(&stream, &data->client_id);
+	serialize_u8(&stream, &message->client_id);
 	return serialize_result(&stream);
 }
 
@@ -102,34 +104,31 @@ struct ServerWorldUpdateMessage {
 // fine and allow us to use it for all sort of other stuff too at the same time
 // without being in a situation where we have a billion arenas being passed
 // around.
-SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* message, Arena* arena)
+SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* message, char* data, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, (char*)message, arena);
+	Bitstream stream = bitstream_init(mode, data, arena);
 
-	// NOW: We are trying serializing the whole damn thing for kicks.
-	serialize_bits(&stream, (char*)message, sizeof(ServerWorldUpdateMessage) * 8);
+	u32 type = SERVER_MESSAGE_WORLD_UPDATE;
+	serialize_u32(&stream, &type);
+	serialize_i32(&stream, &message->frame);
 
-	//u32 type = SERVER_MESSAGE_WORLD_UPDATE;
-	//serialize_u32(&stream, &type);
-	//serialize_i32(&stream, &message->frame);
+	// Eventually, the following becomes a serialize_world function, or something.
+	serialize_f32(&stream, &message->world.countdown_to_start);
 
-	// Eventually, this becomes a serialize_world function, or something.
-	//serialize_f32(&stream, &message->world.countdown_to_start);
+	serialize_f32(&stream, &message->world.ball_position[0]);
+	serialize_f32(&stream, &message->world.ball_position[1]);
+	serialize_f32(&stream, &message->world.ball_velocity[0]);
+	serialize_f32(&stream, &message->world.ball_velocity[1]);
 
-	//serialize_f32(&stream, &message->world.ball_position[0]);
-	//serialize_f32(&stream, &message->world.ball_position[1]);
-	//serialize_f32(&stream, &message->world.ball_velocity[0]);
-	//serialize_f32(&stream, &message->world.ball_velocity[1]);
+	serialize_f32(&stream, &message->world.paddle_positions[0]);
+	serialize_f32(&stream, &message->world.paddle_positions[1]);
+	serialize_f32(&stream, &message->world.paddle_velocities[0]);
+	serialize_f32(&stream, &message->world.paddle_velocities[1]);
 
-	//serialize_f32(&stream, &message->world.paddle_positions[0]);
-	//serialize_f32(&stream, &message->world.paddle_positions[1]);
-	//serialize_f32(&stream, &message->world.paddle_velocities[0]);
-	//serialize_f32(&stream, &message->world.paddle_velocities[1]);
-
-	//serialize_f32(&stream, &message->world.player_inputs[0].move_up);
-	//serialize_f32(&stream, &message->world.player_inputs[0].move_down);
-	//serialize_f32(&stream, &message->world.player_inputs[1].move_up);
-	//serialize_f32(&stream, &message->world.player_inputs[1].move_down);
+	serialize_f32(&stream, &message->world.player_inputs[0].move_up);
+	serialize_f32(&stream, &message->world.player_inputs[0].move_down);
+	serialize_f32(&stream, &message->world.player_inputs[1].move_up);
+	serialize_f32(&stream, &message->world.player_inputs[1].move_down);
 
 	return serialize_result(&stream);
 }
