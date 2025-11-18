@@ -11,6 +11,7 @@ struct Bitstream {
 
 	char* data;
 	Arena* arena;
+	u64 arena_offset;
 };
 
 struct SerializeResult {
@@ -53,9 +54,11 @@ Bitstream bitstream_init(SerializeMode mode, char* data, Arena* arena)
 		.byte_offset = 0,
 		.bit_offset = 0,
 		.arena = arena,
+		.arena_offset = 0
 	};
 	if(stream.mode == SerializeMode::Write) {
 		stream.data = (char*)arena_head(arena);
+		stream.arena_offset = arena->index;
 	} else {
 		stream.data = data;
 	}
@@ -85,10 +88,12 @@ void bitstream_advance_bit(u32* byte_off, u32* bit_off)
 
 void bitstream_write_bits(Bitstream* stream, char* value, u32 size_bits)
 {
-	u64 arena_offset = stream->data - stream->arena->data;
-	u64 new_size_min = arena_offset + stream->byte_offset + size_bits / 8;
-	if(stream->arena->size <= new_size_min) {
-		arena_alloc(stream->arena, new_size_min - stream->arena->size);
+	printf("wriing\n");
+	u64 new_size_min = stream->arena_offset + stream->byte_offset + size_bits / 8;
+	if(stream->arena->index <= new_size_min) {
+		printf("allocing %u bytes (newsize: %u, index: %u)\n", new_size_min - stream->arena->index, new_size_min, stream->arena->index);
+		arena_alloc(stream->arena, new_size_min - stream->arena->index);
+		printf("alloced!\n");
 	}
 
 	u32 val_byte_off = 0;

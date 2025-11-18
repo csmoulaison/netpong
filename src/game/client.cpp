@@ -131,7 +131,7 @@ void client_simulate_frame(World* world, Client* client)
 	}
 }
 
-void client_simulate_and_advance_frame(Client* client)
+void client_simulate_and_advance_frame(Client* client, Arena* transient_arena)
 {
 	ClientWorldState* previous_state = client_state_from_frame(client, client->frame - 1);
 	ClientWorldState* current_state = client_state_from_frame(client, client->frame);
@@ -175,19 +175,19 @@ void client_simulate_and_advance_frame(Client* client)
 		input_message.input_moves_down[i] = (input_world->player_inputs[client->id].move_down > 0.0f);
 	}
 
-	//SerializeResult serialized = serialize_client_input_message(SerializeMode::Write
-	Network::send_packet(client->socket, 0, &input_message, sizeof(input_message));
+	SerializeResult serialized = serialize_client_input(SerializeMode::Write, &input_message, nullptr, transient_arena);
+	Network::send_packet(client->socket, 0, serialized.data, serialized.size_bytes);
 
 	client->frame++;
 }
 
 // Message handling functions
-void client_handle_world_update(Client* client, ClientWorldState* server_state)
+void client_handle_world_update(Client* client, ClientWorldState* server_state, Arena* transient_arena)
 {
 	if(client->connection_state != CLIENT_STATE_ACTIVE) {
 		client->connection_state = CLIENT_STATE_ACTIVE;
 		for(i8 i = 0; i < 6; i++) {
-			client_simulate_and_advance_frame(client);
+			client_simulate_and_advance_frame(client, transient_arena);
 		}
 		printf("Client: Received first world update from server. Starting simulation.\n");
 	}
@@ -200,7 +200,7 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state)
 
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 		while(client->frame < update_frame + 1) {
-			client_simulate_and_advance_frame(client);
+			client_simulate_and_advance_frame(client, transient_arena);
 			//printf("Client: Behind server (%i-%i), simulating catch up frame.\n", update_frame, client->frame);
 		}
 		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
@@ -291,9 +291,9 @@ void client_update_waiting_to_start(Client* client)
 
 }
 
-void client_update_active(Client* client)
+void client_update_active(Client* client, Arena* transient_arena)
 {
-	client_simulate_and_advance_frame(client);
+	client_simulate_and_advance_frame(client, transient_arena);
 }
 
 void client_process_packets(Client* client)
@@ -327,7 +327,7 @@ void client_process_packets(Client* client)
 				}); 
 				break;
 			case SERVER_MESSAGE_ACCEPT_CONNECTION:
-				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, (char*)packet->data, nullptr);
+				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, (char*)data, nullptr);
 				assert(client != nullptr);
 				client_push_event(client, (ClientEvent){ 
 					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
@@ -357,7 +357,7 @@ void client_process_packets(Client* client)
 	arena_destroy(&packet_arena);
 }
 
-void client_process_events(Client* client)
+void client_process_events(Client* client, Arena* transient_arena)
 {
 	client->move_up = false;
 	client->move_down = false;
@@ -371,7 +371,7 @@ void client_process_events(Client* client)
 				client->move_down = true; 
 				break;
 			case CLIENT_EVENT_WORLD_UPDATE:
-				client_handle_world_update(client, &event->world_update); 
+				client_handle_world_update(client, &event->world_update, transient_arena); 
 				break;
 			case CLIENT_EVENT_CONNECTION_ACCEPTED:
 				client_handle_accept_connection(client, event->assigned_id); 
@@ -400,7 +400,7 @@ void client_update(Client* client)
 	arena_init(&transient_arena, 32000);
 	
 	client_process_packets(client);
-	client_process_events(client);
+	client_process_events(client, &transient_arena);
 
 #if NETWORK_SIM_MODE
 	// TODO: It is certainly wrong to use client->frame_length for this, and we
@@ -417,7 +417,7 @@ void client_update(Client* client)
 			client_update_waiting_to_start(client);
 			break;
 		case CLIENT_STATE_ACTIVE:
-			client_update_active(client);
+			client_update_active(client, &transient_arena);
 			break;
 		default: break;
 	}

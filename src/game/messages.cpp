@@ -40,15 +40,17 @@ struct ClientInputMessage {
 	bool input_moves_down[INPUT_WINDOW_FRAMES];
 };
 
-SerializeResult serialize_client_input_message(SerializeMode mode, ClientInputMessage* data, Arena* arena)
+SerializeResult serialize_client_input(SerializeMode mode, ClientInputMessage* message, char* data, Arena* arena)
 {
-	Bitstream stream = bitstream_init(mode, (char*)data, arena);
-	serialize_u32(&stream, &data->type);
-	serialize_i32(&stream, &data->latest_frame);
-	serialize_i32(&stream, &data->oldest_frame);
+	Bitstream stream = bitstream_init(mode, data, arena);
+	serialize_u32(&stream, &message->type);
+
+	serialize_i32(&stream, &message->latest_frame);
+	serialize_i32(&stream, &message->oldest_frame);
 	for(i32 i = 0; i < INPUT_WINDOW_FRAMES; i++) {
-		serialize_bool(&stream, &data->input_moves_up[i]);
-		serialize_bool(&stream, &data->input_moves_down[i]);
+		// NOW: Make this serialize a single bit. Not working at the moment.
+		serialize_i32(&stream, (i32*)&message->input_moves_up[i]);
+		serialize_i32(&stream, (i32*)&message->input_moves_down[i]);
 	}
 	return serialize_result(&stream);
 }
@@ -65,8 +67,7 @@ SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcc
 	Bitstream stream = bitstream_init(mode, data, arena);
 	//serialize_bits(&stream, (char*)message, sizeof(ServerWorldUpdateMessage) * 8);
 
-	u32 type = SERVER_MESSAGE_ACCEPT_CONNECTION;
-	serialize_u32(&stream, &type);
+	serialize_u32(&stream, &message->type);
 	serialize_u8(&stream, &message->client_id);
 	return serialize_result(&stream);
 }
@@ -108,8 +109,7 @@ SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpd
 {
 	Bitstream stream = bitstream_init(mode, data, arena);
 
-	u32 type = SERVER_MESSAGE_WORLD_UPDATE;
-	serialize_u32(&stream, &type);
+	serialize_u32(&stream, &message->type);
 	serialize_i32(&stream, &message->frame);
 
 	// Eventually, the following becomes a serialize_world function, or something.

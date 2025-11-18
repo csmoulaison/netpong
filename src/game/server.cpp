@@ -420,6 +420,8 @@ void server_process_packets(Server* server)
 			client_id = server->connection_to_client_ids[packet->connection_id];
 		}
 
+		ClientInputMessage input_message;
+
 		switch(type) {
 			case CLIENT_MESSAGE_REQUEST_CONNECTION:
 				assert(server != nullptr);
@@ -441,7 +443,9 @@ void server_process_packets(Server* server)
 				assert(client_id != -1);
 				assert(client_id < 2);
 
-				server_handle_client_input_message(server, client_id, (ClientInputMessage*)packet->data);
+				serialize_client_input(SerializeMode::Read, &input_message, (char*)data, nullptr);
+
+				server_handle_client_input_message(server, client_id, (ClientInputMessage*)&input_message);
 				break;
 			default: break;
 		}

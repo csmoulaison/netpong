@@ -5,7 +5,7 @@
 
 struct Arena {
 	u64 index;
-	u64 size;
+	//u64 size;
 	char* data;
 	bool initialized;
 };
@@ -21,7 +21,7 @@ void arena_init(Arena* arena, u64 size)
 {
 	arena->data = (char*)malloc(size);
 	arena->index = 0;
-	arena->size = 0;
+	//arena->size = size;
 	arena->initialized = true;
 }
 
