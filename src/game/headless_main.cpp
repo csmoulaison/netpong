@@ -19,7 +19,7 @@ i32 main(i32 argc, char** argv)
 	arena_init(&program_arena, MEGABYTE);
 
 	Arena transient_arena;
-	arena_init(&transient, MEGABYTE);
+	arena_init(&transient_arena, MEGABYTE);
 
 	Server* server = server_init(&program_arena, true);
 
