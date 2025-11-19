@@ -296,12 +296,9 @@ void client_update_active(Client* client, Arena* transient_arena)
 	client_simulate_and_advance_frame(client, transient_arena);
 }
 
-void client_process_packets(Client* client)
+void client_process_packets(Client* client, Arena* transient_arena)
 {
-	// TODO: Allocate arena from existing arena.
-	Arena packet_arena;
-	arena_init(&packet_arena, 16000);
-	Network::Packet* packet = Network::receive_packets(client->socket, &packet_arena);
+	Network::Packet* packet = Network::receive_packets(client->socket, transient_arena);
 
 	while(packet != nullptr) {
 		u32 type = *(u32*)packet->data;
@@ -313,7 +310,6 @@ void client_process_packets(Client* client)
 		// Variables used in the switch statement.
 		ClientWorldState update_state;
 
-		// NOW: Use serialization functions for all messages.
 		switch(type) {
 			case SERVER_MESSAGE_WORLD_UPDATE:
 				serialize_server_world_update(SerializeMode::Read, &world_update_message, (char*)data, nullptr);
@@ -354,7 +350,6 @@ void client_process_packets(Client* client)
 		}
 		packet = packet->next;
 	}
-	arena_destroy(&packet_arena);
 }
 
 void client_process_events(Client* client, Arena* transient_arena)
@@ -394,13 +389,10 @@ void client_process_events(Client* client, Arena* transient_arena)
 	client->events_len = 0;
 }
 
-void client_update(Client* client) 
+void client_update(Client* client, Arena* transient_arena) 
 {
-	Arena transient_arena;
-	arena_init(&transient_arena, 32000);
-	
-	client_process_packets(client);
-	client_process_events(client, &transient_arena);
+	client_process_packets(client, transient_arena);
+	client_process_events(client, transient_arena);
 
 #if NETWORK_SIM_MODE
 	// TODO: It is certainly wrong to use client->frame_length for this, and we
@@ -417,11 +409,9 @@ void client_update(Client* client)
 			client_update_waiting_to_start(client);
 			break;
 		case CLIENT_STATE_ACTIVE:
-			client_update_active(client, &transient_arena);
+			client_update_active(client, transient_arena);
 			break;
 		default: break;
 	}
-
-	arena_destroy(&transient_arena);
 }
 

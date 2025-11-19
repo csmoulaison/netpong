@@ -16,7 +16,10 @@
 i32 main(i32 argc, char** argv)
 {
 	Arena program_arena;
-	arena_init(&program_arena, GIGABYTE);
+	arena_init(&program_arena, MEGABYTE);
+
+	Arena transient_arena;
+	arena_init(&transient, MEGABYTE);
 
 	Server* server = server_init(&program_arena, true);
 
@@ -27,7 +30,7 @@ i32 main(i32 argc, char** argv)
 	double accumulator_time = 0.0f;
 
 	while(server_close_requested(server) != true) {
-		server_update(server, &program_arena, delta_time);
+		server_update(server, delta_time, &transient_arena);
 
 		while(accumulator_time < delta_time) {
 			double new_time = Time::seconds();
@@ -35,5 +38,7 @@ i32 main(i32 argc, char** argv)
 			current_time = new_time;
 		}
 		accumulator_time -= delta_time;
+
+		arena_clear(&transient_arena);
 	}
 }

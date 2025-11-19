@@ -23,7 +23,7 @@ struct TestMsg {
 i32 main(i32 argc, char** argv)
 {
 	Arena program_arena;
-	arena_init(&program_arena, GIGABYTE);
+	arena_init(&program_arena, MEGABYTE * 64);
 
 	Windowing::Context* window = Windowing::init_pre_graphics(&program_arena);
 	Render::Context* renderer = Render::init(window, &program_arena); 
@@ -34,7 +34,7 @@ i32 main(i32 argc, char** argv)
 	if(argc > 1) {
 		ip_string = argv[1];
 	}
-	game = game_init(window, &program_arena, ip_string);
+	game = game_init(window, ip_string, &program_arena);
 
 	double time = 0.0f;
 	double current_time = Time::seconds();
@@ -60,7 +60,7 @@ i32 main(i32 argc, char** argv)
 			Windowing::update(window, &program_arena);
 
 			Render::advance_state(renderer);
-			game_update(game, window, renderer, &program_arena);
+			game_update(game, window, renderer);
 
 			time_accumulator -= frame_length;
 			time += frame_length;

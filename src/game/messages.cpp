@@ -1,10 +1,3 @@
-SerializeResult serialize_empty_typed_message(SerializeMode mode, void* type, Arena* arena)
-{
-	Bitstream stream = bitstream_init(mode, (char*)type, arena);
-	serialize_u32(&stream, (u32*)type);
-	return serialize_result(&stream);
-}
- 
 // Client messages
 enum MessageType {
 	CLIENT_MESSAGE_REQUEST_CONNECTION,

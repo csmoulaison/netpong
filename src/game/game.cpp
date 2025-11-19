@@ -25,6 +25,9 @@ struct Game {
 	bool close_requested;
 	u32 frames_since_init;
 
+	Arena persistent_arena;
+	Arena transient_arena;
+
 	Windowing::ButtonHandle move_up_buttons[2];
 	Windowing::ButtonHandle move_down_buttons[2];
 	Windowing::ButtonHandle quit_button;
@@ -43,13 +46,16 @@ struct Game {
 	Server* server;
 };
 
-Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string) 
+Game* game_init(Windowing::Context* window, char* ip_string, Arena* program_arena) 
 {
-	Game* game = (Game*)arena_alloc(arena, sizeof(Game));
+	Game* game = (Game*)arena_alloc(program_arena, sizeof(Game));
 
 	game->state = GameState::Menu;
 	game->close_requested = false;
 	game->frames_since_init = 0;
+
+	arena_init(&game->persistent_arena, MEGABYTE);
+	arena_init(&game->transient_arena, MEGABYTE);
 
 	game->move_up_buttons[0] = Windowing::register_key(window, Windowing::Keycode::W);
 	game->move_down_buttons[0] = Windowing::register_key(window, Windowing::Keycode::S);
@@ -75,33 +81,34 @@ Game* game_init(Windowing::Context* window, Arena* arena, char* ip_string)
 	return game;
 }
 
-void game_init_session(Game* game, i32 config_setting, Arena* arena) 
+void game_init_session(Game* game, i32 config_setting) 
 {
+	// TODO: persistent_arena: make session_arena for per session persistence.
 	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
-			game->client = client_init(arena, game->ip_string);
+			game->client = client_init(&game->persistent_arena, game->ip_string);
 			break;
 		case CONFIG_FULL_LOCAL:
 			game->local_server = true;
-			game->server = server_init(arena, false);
+			game->server = server_init(&game->persistent_arena, false);
 			server_add_local_player(game->server);
 			server_add_local_player(game->server);
 			break;
 		case CONFIG_HALF_LOCAL:
 			game->local_server = true;
-			game->server = server_init(arena, true);
+			game->server = server_init(&game->persistent_arena, true);
 			server_add_local_player(game->server);
 			break;
 		case CONFIG_FULL_BOT:
 			game->local_server = true;
-			game->server = server_init(arena, true);
+			game->server = server_init(&game->persistent_arena, true);
 			server_add_bot(game->server);
 			server_add_bot(game->server);
 			break;
 		case CONFIG_HALF_BOT:
 			game->local_server = true;
-			game->server = server_init(arena, true);
+			game->server = server_init(&game->persistent_arena, true);
 			server_add_local_player(game->server);
 			server_add_bot(game->server);
 			break;
@@ -201,7 +208,7 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 	render_rect(renderer, ball, window);
 }
 
-void game_update(Game* game, Windowing::Context* window, Render::Context* renderer, Arena* arena)
+void game_update(Game* game, Windowing::Context* window, Render::Context* renderer)
 {
 	if(game->state == GameState::Menu) {
 		if(Windowing::button_pressed(window, game->move_up_buttons[0])) {
@@ -247,7 +254,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 
 		if(Windowing::button_pressed(window, game->select_button)) {
 			game->state = GameState::Session;
-			game_init_session(game, game->menu_selection, arena);
+			game_init_session(game, game->menu_selection);
 		}
 	} else {
 		if(game->local_server) {
@@ -272,7 +279,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					});
 				}
 			}
-			server_update(server, BASE_FRAME_LENGTH);
+			server_update(server, BASE_FRAME_LENGTH, &game->transient_arena);
 
 			if(server_is_active(server)) {
 				render_active_state(game, renderer, window);
@@ -289,7 +296,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 				client->events_len++;
 			}
-			client_update(client);
+			client_update(client, &game->transient_arena);
 
 			switch(client->connection_state) {
 				case CLIENT_STATE_REQUESTING_CONNECTION:
@@ -308,6 +315,8 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 
 	game->close_requested = Windowing::button_down(window, game->quit_button);
 	game->frames_since_init++;
+
+	arena_clear(&game->transient_arena);
 }
 
 bool game_close_requested(Game* game)
