@@ -48,9 +48,8 @@ SerializeResult serialize_client_input(SerializeMode mode, ClientInputMessage* m
 	serialize_i32(&stream, &message->latest_frame);
 	serialize_i32(&stream, &message->oldest_frame);
 	for(i32 i = 0; i < INPUT_WINDOW_FRAMES; i++) {
-		// NOW: Make this serialize a single bit. Not working at the moment.
-		serialize_i32(&stream, (i32*)&message->input_moves_up[i]);
-		serialize_i32(&stream, (i32*)&message->input_moves_down[i]);
+		serialize_bool(&stream, &message->input_moves_up[i]);
+		serialize_bool(&stream, &message->input_moves_down[i]);
 	}
 	return serialize_result(&stream);
 }
@@ -92,19 +91,6 @@ struct ServerWorldUpdateMessage {
 	World world;
 };
 
-// NOW: This isn't working at the moment. For some reason, implementing it led
-// to the joining client stuck on "Waiting to start..." (no start game message?)
-// 
-// We want to get this to work, and then finish implementing both receive and
-// send message packing.
-// 
-// After, we want to change all these references to the arenas to be clearly
-// referencing a sub-arena which is only for packet sending. We need to finally
-// get sub-allocation set up for arenas so we can have some static memory we
-// clear after every frame. Really, just a transient sub-arena would work just
-// fine and allow us to use it for all sort of other stuff too at the same time
-// without being in a situation where we have a billion arenas being passed
-// around.
 SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpdateMessage* message, char* data, Arena* arena)
 {
 	Bitstream stream = bitstream_init(mode, data, arena);

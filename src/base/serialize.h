@@ -1,7 +1,6 @@
 #ifndef serialize_h_INCLUDED
 #define serialize_h_INCLUDED
 
-// NOW: Implement serialization on the packet messages.
 enum class SerializeMode { Write, Read };
 
 struct Bitstream {
@@ -19,15 +18,6 @@ struct SerializeResult {
 	char* data;
 };
 
-// NOW: a clarification of reading/writing
-// In the write case: We are reading from 'data' and writing to the arena.
-// In the read case: We are reading from an arbitrary stream of data, and
-//                   writing to 'data'.
-// When writing: Each serialize function takes data from 'value' and writes it
-//               to the given memory arena.
-// When reading: Each serialize function takes data from this preallocated
-//               stream and writed it to the passed in 'value'.
-// In both cases, 'data' is the uncompressed structure.
 Bitstream bitstream_init(SerializeMode mode, char* data, Arena* arena);
 SerializeResult serialize_result(Bitstream* stream);
 void serialize_bool(Bitstream* stream, bool* value);
@@ -38,12 +28,6 @@ void serialize_f32(Bitstream* stream, f32* value);
 
 #ifdef CSM_BASE_IMPLEMENTATION
 
-// NOW: NOW: Okay so we are trying 'data' just being 1 thing.
-// When writing: 'data' is the arena we are packing into.
-// When reading: 'data' is the packed data that we are reading from.
-// 
-// The 'data' argument is ignored in write mode, and the current arena head is
-// used instead.
 Bitstream bitstream_init(SerializeMode mode, char* data, Arena* arena)
 {
 	assert((arena == nullptr && mode == SerializeMode::Read) || 
@@ -88,12 +72,9 @@ void bitstream_advance_bit(u32* byte_off, u32* bit_off)
 
 void bitstream_write_bits(Bitstream* stream, char* value, u32 size_bits)
 {
-	printf("wriing\n");
 	u64 new_size_min = stream->arena_offset + stream->byte_offset + size_bits / 8;
 	if(stream->arena->index <= new_size_min) {
-		printf("allocing %u bytes (newsize: %u, index: %u)\n", new_size_min - stream->arena->index, new_size_min, stream->arena->index);
 		arena_alloc(stream->arena, new_size_min - stream->arena->index);
-		printf("alloced!\n");
 	}
 
 	u32 val_byte_off = 0;
@@ -118,6 +99,7 @@ void bitstream_write_bits(Bitstream* stream, char* value, u32 size_bits)
 
 void bitstream_read_bits(Bitstream* stream, char* value, u32 size_bits)
 {
+	*value = 0;
 	u32 val_byte_off = 0;
 	u32 val_bit_off = 0;
 	for(u32 i = 0; i < size_bits; i++) {
