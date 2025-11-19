@@ -1,9 +1,11 @@
 // NOW: < LIST:
-// - Bitpacking of packets: might open up some ideas about streamlining the
-// packet stuff, who knows?
+// - Session reconfiguration.
 // - Cleanup. I think it makes sense to save major cleanups for after a lot of
 // this potentially very disruptive work.
-//
+//   - Primarily, make sure everything is in the proper place with regards to
+//   different configurations. Look for repeated work, etc.
+//   - Only finish once we have combed through every file in the project.
+//   
 // WHETHER we want the following before moving to the mech stuff is debatable:
 // - Most majorly, a task system with a thread pool, dependency graph, all that.
 // I think it makes the most sense to do this in another project first before
