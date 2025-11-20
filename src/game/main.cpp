@@ -13,13 +13,6 @@
 #include "game/client.cpp"
 #include "game/game.cpp"
 
-struct TestMsg {
-	u32 a;
-	u8 b;
-	bool c;
-	float d;
-};
-
 i32 main(i32 argc, char** argv)
 {
 	Arena program_arena;
