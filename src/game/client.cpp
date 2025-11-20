@@ -107,7 +107,7 @@ Client* client_init(Arena* session_arena, char* ip_string)
 // Frame simulation functions
 void client_simulate_frame(World* world, Client* client)
 {
-	// TODO: This is kind of a big huge thing I missed. The frame_length is being
+	// $TODO: This is kind of a big huge thing I missed. The frame_length is being
 	// used here, and it's now often going to be different than in the case of the
 	// original simulation. We want to store the original frame length in each
 	// stored state after simulation, and reuse it the same way we currently reuse
@@ -394,7 +394,7 @@ void client_update(Client* client, Arena* transient_arena)
 	client_process_events(client, transient_arena);
 
 #if NETWORK_SIM_MODE
-	// TODO: It is certainly wrong to use client->frame_length for this, and we
+	// $TODO: It is certainly wrong to use client->frame_length for this, and we
 	// should certainly have a notion of delta time which is decoupled from the
 	// network tick.
 	Network::update_sim_mode(client->socket, client->frame_length);

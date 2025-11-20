@@ -292,7 +292,7 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 			} else if(latest_frame_received - server->frame < 3) {
 				// Client speed up if the server is too far ahead, client slow down if the
 				// server is too far behind.
-				// TODO: We want the thresholds to be based on current average ping to this client.
+				// $TODO: We want the thresholds to be based on current average ping to this client.
 				ServerSpeedUpMessage speed_message;
 				speed_message.type = SERVER_MESSAGE_SPEED_UP;
 				Network::send_packet(server->socket, client->connection_id, &speed_message, sizeof(speed_message));
@@ -323,7 +323,7 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 			// Client timeout. We haven't received any inputs from the client for
 			// INPUT_BUFFER_SIZE frames.
 			// 
-			// TODO: We want to decouple this from the queue size, really. 
+			// $TODO: We want to decouple this from the queue size, really. 
 			if(server->frame - effective_input_frame > INPUT_BUFFER_SIZE) {
 				ServerDisconnectMessage disconnect_message;
 				disconnect_message.type = SERVER_MESSAGE_DISCONNECT;
@@ -359,6 +359,7 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 
 	// Simulate using client inputs.
 	world_simulate(&server->world, delta_time);
+
 	// Reset the game if the ball has exited the play area.
 	if(server->world.ball_position[0] < -1.5f
 	|| server->world.ball_position[0] > 1.5f) {

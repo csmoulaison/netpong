@@ -43,11 +43,13 @@ Network::Socket* platform_init_server_socket(Arena* arena)
 		panic();
 	}
 
-	// TODO: Set to reusable so we don't have to wait for the timeout (a few
+	// $TODO: Set to reusable so we don't have to wait for the timeout (a few
 	// minutes?) before starting up a new server socket.
+	// 
 	// The problem is, this means it can receive packets that were sent to the
 	// previous server socket, so we need to account for this or else we are sure
 	// to run into some trouble.
+	// 
 	// Maybe the packets will need to have some kind of versioning situation?
 	i32 opt = 1;
 	setsockopt(sock->descriptor, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
