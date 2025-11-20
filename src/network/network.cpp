@@ -9,6 +9,10 @@ namespace Network {
 		return platform_init_client_socket(arena, ip_string);
 	}
 
+	void close_socket(Network::Socket* socket) {
+		return platform_close_socket(socket);
+	}
+
 	i32 add_connection(Network::Socket* socket, void* address) {
 		return platform_add_connection(socket, address);
 	}

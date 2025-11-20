@@ -87,10 +87,10 @@ void client_reset_game(Client* client)
 	}
 }
 
-Client* client_init(Arena* arena, char* ip_string)
+Client* client_init(Arena* session_arena, char* ip_string)
 {
-	Client* client = (Client*)arena_alloc(arena, sizeof(Client));
-	client->socket = Network::init_client_socket(arena, ip_string);
+	Client* client = (Client*)arena_alloc(session_arena, sizeof(Client));
+	client->socket = Network::init_client_socket(session_arena, ip_string);
 
 	client->events_len = 0;
 	client->move_up = false;

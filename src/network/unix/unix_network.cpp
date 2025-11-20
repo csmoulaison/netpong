@@ -43,6 +43,15 @@ Network::Socket* platform_init_server_socket(Arena* arena)
 		panic();
 	}
 
+	// TODO: Set to reusable so we don't have to wait for the timeout (a few
+	// minutes?) before starting up a new server socket.
+	// The problem is, this means it can receive packets that were sent to the
+	// previous server socket, so we need to account for this or else we are sure
+	// to run into some trouble.
+	// Maybe the packets will need to have some kind of versioning situation?
+	i32 opt = 1;
+	setsockopt(sock->descriptor, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
 	struct sockaddr_in server_address;
 	memset(&server_address, 0, sizeof(struct sockaddr_in));
 
@@ -94,6 +103,12 @@ Network::Socket* platform_init_client_socket(Arena* arena, char* ip_string)
 #endif
 
 	return platform_socket;
+}
+
+void platform_close_socket(Network::Socket* socket)
+{
+	UnixSocket* sock = (UnixSocket*)&socket->backend;
+	close(sock->descriptor);
 }
 
 i32 platform_add_connection(Network::Socket* socket, void* address)

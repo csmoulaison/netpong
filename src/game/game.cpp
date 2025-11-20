@@ -1,5 +1,4 @@
 // NOW: < LIST:
-// - Session reconfiguration.
 // - Cleanup. I think it makes sense to save major cleanups for after a lot of
 // this potentially very disruptive work.
 //   - Primarily, make sure everything is in the proper place with regards to
@@ -28,6 +27,7 @@ struct Game {
 	u32 frames_since_init;
 
 	Arena persistent_arena;
+	Arena session_arena;
 	Arena transient_arena;
 
 	Windowing::ButtonHandle move_up_buttons[2];
@@ -57,6 +57,7 @@ Game* game_init(Windowing::Context* window, char* ip_string, Arena* program_aren
 	game->frames_since_init = 0;
 
 	arena_init(&game->persistent_arena, MEGABYTE);
+	arena_init(&game->session_arena, MEGABYTE);
 	arena_init(&game->transient_arena, MEGABYTE);
 
 	game->move_up_buttons[0] = Windowing::register_key(window, Windowing::Keycode::W);
@@ -89,28 +90,28 @@ void game_init_session(Game* game, i32 config_setting)
 	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
-			game->client = client_init(&game->persistent_arena, game->ip_string);
+			game->client = client_init(&game->session_arena, game->ip_string);
 			break;
 		case CONFIG_FULL_LOCAL:
 			game->local_server = true;
-			game->server = server_init(&game->persistent_arena, false);
+			game->server = server_init(&game->session_arena, false);
 			server_add_local_player(game->server);
 			server_add_local_player(game->server);
 			break;
 		case CONFIG_HALF_LOCAL:
 			game->local_server = true;
-			game->server = server_init(&game->persistent_arena, true);
+			game->server = server_init(&game->session_arena, true);
 			server_add_local_player(game->server);
 			break;
 		case CONFIG_FULL_BOT:
 			game->local_server = true;
-			game->server = server_init(&game->persistent_arena, true);
+			game->server = server_init(&game->session_arena, true);
 			server_add_bot(game->server);
 			server_add_bot(game->server);
 			break;
 		case CONFIG_HALF_BOT:
 			game->local_server = true;
-			game->server = server_init(&game->persistent_arena, true);
+			game->server = server_init(&game->session_arena, true);
 			server_add_local_player(game->server);
 			server_add_bot(game->server);
 			break;
@@ -225,6 +226,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				game->menu_selection = 0;
 			}
 		}
+
 		
 		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot" };
 
@@ -258,6 +260,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			game->state = GameState::Session;
 			game_init_session(game, game->menu_selection);
 		}
+		game->close_requested = Windowing::button_pressed(window, game->quit_button);
 	} else {
 		if(game->local_server) {
 			Server* server = game->server;
@@ -313,11 +316,27 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				default: break;
 			}
 		}
+
+		// Close server and client resources if they exist.
+		if(Windowing::button_pressed(window, game->quit_button)) {
+			if(game->client != nullptr) {
+				Network::close_socket(game->client->socket);
+				game->client->socket = nullptr;
+				game->client = nullptr;
+			}
+			if(game->server != nullptr) {
+				if(game->server->socket != nullptr) {
+					Network::close_socket(game->server->socket);
+					game->server->socket = nullptr;
+				}
+				game->server = nullptr;
+			}
+			arena_clear(&game->session_arena);
+			game->state = GameState::Menu;
+		}
 	}
 
-	game->close_requested = Windowing::button_down(window, game->quit_button);
 	game->frames_since_init++;
-
 	arena_clear(&game->transient_arena);
 }
 

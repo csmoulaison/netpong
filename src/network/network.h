@@ -60,6 +60,7 @@ namespace Network {
 
 Network::Socket* platform_init_server_socket(Arena* arena);
 Network::Socket* platform_init_client_socket(Arena* arena, char* ip_string);
+void platform_close_socket(Network::Socket* socket);
 i32 platform_add_connection(Network::Socket* socket, void* address);
 void platform_free_connection(Network::Socket* socket, i32 connection_id);
 void platform_send_packet(Network::Socket* socket, i32 connection_id, void* packet, u32 size);

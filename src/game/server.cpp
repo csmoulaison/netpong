@@ -93,12 +93,12 @@ void server_reset_game(Server* server)
 	world_init(&server->world);
 }
 
-Server* server_init(Arena* arena, bool accept_client_connections)
+Server* server_init(Arena* session_arena, bool accept_client_connections)
 {
-	Server* server = (Server*)arena_alloc(arena, sizeof(Server));
+	Server* server = (Server*)arena_alloc(session_arena, sizeof(Server));
 
 	if(accept_client_connections) {
-		server->socket = Network::init_server_socket(arena);
+		server->socket = Network::init_server_socket(session_arena);
 	} else {
 		server->socket = nullptr;
 	}
