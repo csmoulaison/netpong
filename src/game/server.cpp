@@ -3,7 +3,7 @@
 
 #define MAX_SERVER_EVENTS 256
 
-// TODO: Things we want to be able to test/log/handle:
+// $TODO: Things we want to be able to test/log/handle:
 // 1. Differing packet loss rates.
 // 2. Differing packet latency/latency variance.
 // 3. Client connections created and destroyed in various orders, mid-game.
@@ -112,8 +112,6 @@ Server* server_init(Arena* session_arena, bool accept_client_connections)
 	return server;
 }
 
-// TODO: Probably make these two return success or id, but that's not really
-// useful for our current circumstance.
 void server_add_local_player(Server* server)
 {
 	for(u8 i = 0; i < 2; i++) {
@@ -364,14 +362,7 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 	// Reset the game if the ball has exited the play area.
 	if(server->world.ball_position[0] < -1.5f
 	|| server->world.ball_position[0] > 1.5f) {
-		// TODO: Should be world_init.
-		server->world.ball_position[0] = 0.0f;
-		server->world.ball_position[1] = 0.0f;
-		server->world.ball_velocity[0] = 0.7f;
-		server->world.ball_velocity[1] = 0.35f;
-		server->world.paddle_positions[0] = 0.0f;
-		server->world.paddle_positions[1] = 0.0f;
-		server->world.countdown_to_start = START_COUNTDOWN_SECONDS;
+		world_init(&server->world);
 	}
 
 	ServerWorldUpdateMessage update_message = {};

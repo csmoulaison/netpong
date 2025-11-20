@@ -120,7 +120,6 @@ void client_simulate_frame(World* world, Client* client)
 	world_simulate(world, client->frame_length);
 
 	i8 other_id = client_get_other_id(client);
-	// TODO: Test input attenuation against intended case.
 	world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_up < 0.0f) {
 		world->player_inputs[other_id].move_up == 0.0f;
