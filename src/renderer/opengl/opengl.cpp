@@ -153,7 +153,7 @@ void platform_render_update(Render::Context* renderer, Render::State* render_sta
 	}
 	
 	// Gl render
-	glClearColor(0.2f, 0.4f, 0.6f, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 1);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 	// Draw rects

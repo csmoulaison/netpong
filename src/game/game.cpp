@@ -14,7 +14,7 @@
 // important. But do we want fun beeps? Maybe we want fun beeps.
 // - Advanced compression stuff for packets beyond just bitpacking.
 
-#define MENU_OPTIONS_LEN 5
+#define MENU_OPTIONS_LEN 6
 
 enum class GameState {
 	Menu,
@@ -22,13 +22,13 @@ enum class GameState {
 };
 
 struct Game {
-	GameState state;
-	bool close_requested;
-	u32 frames_since_init;
-
 	Arena persistent_arena;
 	Arena session_arena;
 	Arena transient_arena;
+
+	GameState state;
+	bool close_requested;
+	u32 frames_since_init;
 
 	Windowing::ButtonHandle move_up_buttons[2];
 	Windowing::ButtonHandle move_down_buttons[2];
@@ -52,13 +52,13 @@ Game* game_init(Windowing::Context* window, char* ip_string, Arena* program_aren
 {
 	Game* game = (Game*)arena_alloc(program_arena, sizeof(Game));
 
-	game->state = GameState::Menu;
-	game->close_requested = false;
-	game->frames_since_init = 0;
-
 	arena_init(&game->persistent_arena, MEGABYTE);
 	arena_init(&game->session_arena, MEGABYTE);
 	arena_init(&game->transient_arena, MEGABYTE);
+
+	game->state = GameState::Menu;
+	game->close_requested = false;
+	game->frames_since_init = 0;
 
 	game->move_up_buttons[0] = Windowing::register_key(window, Windowing::Keycode::W);
 	game->move_down_buttons[0] = Windowing::register_key(window, Windowing::Keycode::S);
@@ -86,7 +86,6 @@ Game* game_init(Windowing::Context* window, char* ip_string, Arena* program_aren
 
 void game_init_session(Game* game, i32 config_setting) 
 {
-	// TODO: persistent_arena: make session_arena for per session persistence.
 	switch(config_setting) {
 		case CONFIG_REMOTE:
 			game->local_server = false;
@@ -149,7 +148,7 @@ void render_requesting_connection_state(Game* game, Render::Context* renderer, W
 		64.0f, window->window_height - 64.0f, 
 		0.0f, 1.0f,
 		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
-		FONT_FACE_LARGE);
+		FONT_FACE_SMALL);
 }
 
 void render_waiting_to_start_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
@@ -160,7 +159,7 @@ void render_waiting_to_start_state(Game* game, Render::Context* renderer, Window
 		64.0f, window->window_height - 64.0f, 
 		0.0f, 1.0f,
 		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
-		FONT_FACE_LARGE);
+		FONT_FACE_SMALL);
 }
 
 void render_active_state(Game* game, Render::Context* renderer, Windowing::Context* window)
@@ -226,10 +225,15 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				game->menu_selection = 0;
 			}
 		}
-
 		
-		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot" };
-
+		Render::text_line(
+			renderer, 
+			"Netpong", 
+			64.0f, window->window_height - 64.0f, 
+			0.0f, 1.0f,
+			1.0f, 1.0f, 1.0f, 1.0f,
+			FONT_FACE_LARGE);
+		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot", "Quit" };
 		for(u32 i = 0; i < MENU_OPTIONS_LEN; i++) {
 			float activator_speed = 10.0f;
 			if(i == game->menu_selection) {
@@ -250,17 +254,24 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			Render::text_line(
 				renderer, 
 				strings[i], 
-				64.0f + (64.0f * game->menu_activations[i]), window->window_height - 64.0f - (96.0f * i), 
+				64.0f + (48.0f * game->menu_activations[i]), window->window_height - 200.0f - (96.0f * i), 
 				0.0f, 1.0f,
 				1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f,
-				FONT_FACE_LARGE);
+				FONT_FACE_SMALL);
 		}
 
 		if(Windowing::button_pressed(window, game->select_button)) {
-			game->state = GameState::Session;
-			game_init_session(game, game->menu_selection);
+			if(game->menu_selection == MENU_OPTIONS_LEN - 1) {
+				game->close_requested = true;
+			} else {
+				game->state = GameState::Session;
+				game_init_session(game, game->menu_selection);
+			}
 		}
-		game->close_requested = Windowing::button_pressed(window, game->quit_button);
+
+		if(Windowing::button_pressed(window, game->quit_button)) {
+			game->close_requested = true;
+		}
 	} else {
 		if(game->local_server) {
 			Server* server = game->server;
