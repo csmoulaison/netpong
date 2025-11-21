@@ -40,7 +40,6 @@ struct Game {
 	i32 menu_selection;
 	float menu_activations[MENU_OPTIONS_LEN];
 
-	f32 visual_ball_position[2];
 	f32 visual_paddle_positions[2];
 
 	bool local_server;
@@ -140,6 +139,44 @@ void render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
+void render_menu_state(Game* game, Render::Context* renderer, Windowing::Context* window)
+{
+	Render::text_line(
+		renderer, 
+		"Netpong", 
+		64.0f, window->window_height - 64.0f, 
+		0.0f, 1.0f,
+		1.0f, 1.0f, 1.0f, 1.0f,
+		FONT_FACE_LARGE);
+
+	const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot", "Quit" };
+	for(u32 i = 0; i < MENU_OPTIONS_LEN; i++) {
+		float* activation = &game->menu_activations[i];
+		float activator_speed = 10.0f;
+
+		// Animate text based on selection.
+		if(i == game->menu_selection && *activation < 1.0f) {
+			*activation += BASE_FRAME_LENGTH * activator_speed;
+			if(*activation > 1.0f) {
+				*activation = 1.0f;
+			}
+		} else if(i != game->menu_selection && *activation > 0.0f) {
+			*activation -= BASE_FRAME_LENGTH * activator_speed;
+			if(*activation < 0.0f) {
+				*activation = 0.0f;
+			}
+		}
+
+		Render::text_line(
+			renderer, 
+			strings[i], 
+			64.0f + (48.0f * *activation), window->window_height - 200.0f - (96.0f * i), 
+			0.0f, 1.0f,
+			1.0f, 1.0f, 1.0f - *activation, 1.0f,
+			FONT_FACE_SMALL);
+	}
+}
+
 void render_requesting_connection_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
 {
 	Render::text_line(
@@ -164,8 +201,12 @@ void render_waiting_to_start_state(Game* game, Render::Context* renderer, Window
 
 void render_active_state(Game* game, Render::Context* renderer, Windowing::Context* window)
 {
+	// Rendering player paddles differs depending on the client/server configuration.
+	// Essentially, the following code differentiates between remote and local
+	// players, and linearly interpolates the position of the remote ones to smooth
+	// out mispredictions.
 	World* world;
-	if(game->local_server) { // Server is local.
+	if(game->local_server) {
 		Server* server = game->server;
 		world = &server->world;
 
@@ -177,7 +218,7 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 				game->visual_paddle_positions[i] = world->paddle_positions[i];
 			}
 		}
-	} else { // Server is remote.
+	} else {
 		Client* client = game->client;
 		world = &client_state_from_frame(client, client->frame - 1)->world;
 
@@ -185,10 +226,9 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 		render_visual_lerp(&game->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
 		game->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
 	}
-	game->visual_ball_position[0] = world->ball_position[0];
-	game->visual_ball_position[1] = world->ball_position[1];
 
-	// Render world
+	// We use calculated paddle positions for rendering, and render the ball
+	// position directly without any interpolation.
 	for(u8 i = 0; i < 2; i++) {
 		Rect paddle;
 		paddle.x = -PADDLE_X + i * PADDLE_X * 2.0f;
@@ -198,8 +238,8 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 		render_rect(renderer, paddle, window);
 	}
 	Rect ball;
-	ball.x = game->visual_ball_position[0];
-	ball.y = game->visual_ball_position[1];
+	ball.x = world->ball_position[0];
+	ball.y = world->ball_position[1];
 	ball.w = BALL_WIDTH;
 	ball.h = BALL_WIDTH;
 	render_rect(renderer, ball, window);
@@ -208,6 +248,11 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 void game_update(Game* game, Windowing::Context* window, Render::Context* renderer)
 {
 	if(game->state == GameState::Menu) {
+		if(Windowing::button_pressed(window, game->quit_button)) {
+			game->close_requested = true;
+			return;
+		}
+
 		if(Windowing::button_pressed(window, game->move_up_buttons[0])) {
 			game->menu_selection--;
 			if(game->menu_selection < 0) {
@@ -220,41 +265,6 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				game->menu_selection = 0;
 			}
 		}
-		
-		Render::text_line(
-			renderer, 
-			"Netpong", 
-			64.0f, window->window_height - 64.0f, 
-			0.0f, 1.0f,
-			1.0f, 1.0f, 1.0f, 1.0f,
-			FONT_FACE_LARGE);
-
-		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot", "Quit" };
-		for(u32 i = 0; i < MENU_OPTIONS_LEN; i++) {
-			float* activation = &game->menu_activations[i];
-			float activator_speed = 10.0f;
-
-			// Animate text based on selection.
-			if(i == game->menu_selection && *activation < 1.0f) {
-				*activation += BASE_FRAME_LENGTH * activator_speed;
-				if(*activation > 1.0f) {
-					*activation = 1.0f;
-				}
-			} else if(i != game->menu_selection && *activation > 0.0f) {
-				*activation -= BASE_FRAME_LENGTH * activator_speed;
-				if(*activation < 0.0f) {
-					*activation = 0.0f;
-				}
-			}
-
-			Render::text_line(
-				renderer, 
-				strings[i], 
-				64.0f + (48.0f * *activation), window->window_height - 200.0f - (96.0f * i), 
-				0.0f, 1.0f,
-				1.0f, 1.0f, 1.0f - *activation, 1.0f,
-				FONT_FACE_SMALL);
-		}
 
 		if(Windowing::button_pressed(window, game->select_button)) {
 			if(game->menu_selection == MENU_OPTIONS_LEN - 1) {
@@ -265,10 +275,28 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			}
 		}
 
-		if(Windowing::button_pressed(window, game->quit_button)) {
-			game->close_requested = true;
-		}
+		render_menu_state(game, renderer, window);
 	} else {
+		// Pressing the quit button from here brings us back to the menu, and cleanup
+		// of the per session resources is done here.
+		if(Windowing::button_pressed(window, game->quit_button)) {
+			if(game->client != nullptr) {
+				Network::close_socket(game->client->socket);
+				game->client->socket = nullptr;
+				game->client = nullptr;
+			}
+			if(game->server != nullptr) {
+				if(game->server->socket != nullptr) {
+					Network::close_socket(game->server->socket);
+					game->server->socket = nullptr;
+				}
+				game->server = nullptr;
+			}
+			arena_clear(&game->session_arena);
+			game->state = GameState::Menu;
+			return;
+		}
+
 		// NOW: This is a rat's nest. What should be here vs elsewhere and where
 		// should we introduce a nested function?
 		if(game->local_server) {
@@ -326,23 +354,6 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			}
 		}
 
-		// Close server and client resources if they exist.
-		if(Windowing::button_pressed(window, game->quit_button)) {
-			if(game->client != nullptr) {
-				Network::close_socket(game->client->socket);
-				game->client->socket = nullptr;
-				game->client = nullptr;
-			}
-			if(game->server != nullptr) {
-				if(game->server->socket != nullptr) {
-					Network::close_socket(game->server->socket);
-					game->server->socket = nullptr;
-				}
-				game->server = nullptr;
-			}
-			arena_clear(&game->session_arena);
-			game->state = GameState::Menu;
-		}
 	}
 
 	game->frames_since_init++;
