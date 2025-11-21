@@ -140,7 +140,7 @@ void server_add_bot(Server* server)
 // back acceptance packets and setting the relevant slots to the PENDING
 // state, where we will wait until we receive a counter acknowledgement from the
 // new client.
-void server_handle_connection_request(Server* server, i32 connection_id, Arena* transient_arena)
+void server_handle_connection_request(Server* server, i32 connection_id, Arena* frame_arena)
 {
 	ServerSlot* client;
 	i32 client_id;
@@ -181,7 +181,7 @@ void server_handle_connection_request(Server* server, i32 connection_id, Arena* 
 	accept_message.type = SERVER_MESSAGE_ACCEPT_CONNECTION;
 	accept_message.client_id = client_id;
 
-	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, nullptr, transient_arena);
+	serialized = serialize_server_accept_connection(SerializeMode::Write, &accept_message, nullptr, frame_arena);
 	Network::send_packet(server->socket, connection_id, serialized.data, serialized.size_bytes);
 	return;
 
@@ -271,7 +271,7 @@ void server_update_idle(Server* server, f32 dt)
 	}
 }
 
-void server_update_active(Server* server, f32 delta_time, Arena* transient_arena)
+void server_update_active(Server* server, f32 delta_time, Arena* frame_arena)
 {
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
@@ -374,7 +374,7 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 	for(u8 i = 0; i < 2; i++) {
 		ServerSlot* client = &server->slots[i];
 		if(client->type == SERVER_PLAYER_REMOTE) {
-			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, nullptr, transient_arena);
+			SerializeResult serialized = serialize_server_world_update(SerializeMode::Write, &update_message, nullptr, frame_arena);
 			Network::send_packet(server->socket, client->connection_id, serialized.data, serialized.size_bytes);
 		}
 	}
@@ -382,9 +382,9 @@ void server_update_active(Server* server, f32 delta_time, Arena* transient_arena
 	server->frame++;
 }
 
-void server_process_packets(Server* server, Arena* transient_arena)
+void server_process_packets(Server* server, Arena* frame_arena)
 {
-	Network::Packet* packet = Network::receive_packets(server->socket, transient_arena);
+	Network::Packet* packet = Network::receive_packets(server->socket, frame_arena);
 
 	bool new_connections[2] = { false, false };
 
@@ -430,13 +430,13 @@ void server_process_packets(Server* server, Arena* transient_arena)
 	}
 }
 
-void server_process_events(Server* server, Arena* transient_arena)
+void server_process_events(Server* server, Arena* frame_arena)
 {
 	for(u32 i = 0; i < server->events_len; i++) {
 		ServerEvent* event = &server->events[i];
 		switch(event->type) {
 			case SERVER_EVENT_CONNECTION_REQUEST:
-				server_handle_connection_request(server, event->connection_id, transient_arena);
+				server_handle_connection_request(server, event->connection_id, frame_arena);
 				break;
 			case SERVER_EVENT_CLIENT_READY_TO_START:
 				server_handle_client_ready(server, event->client_id);
@@ -450,7 +450,7 @@ void server_process_events(Server* server, Arena* transient_arena)
 	server->events_len = 0;
 }
 
-void server_update(Server* server, f32 delta_time, Arena* transient_arena)
+void server_update(Server* server, f32 delta_time, Arena* frame_arena)
 {
 	// Simulate bots
 	for(u8 i = 0; i < 2; i++) {
@@ -479,17 +479,17 @@ void server_update(Server* server, f32 delta_time, Arena* transient_arena)
 	}
 
 	if(server->socket != nullptr) {
-		server_process_packets(server, transient_arena);
+		server_process_packets(server, frame_arena);
 	}
 
-	server_process_events(server, transient_arena);
+	server_process_events(server, frame_arena);
 
 #if NETWORK_SIM_MODE
 	Network::update_sim_mode(server->socket, delta_time);
 #endif
 
 	if(server_is_active(server)) {
-		server_update_active(server, delta_time, transient_arena);
+		server_update_active(server, delta_time, frame_arena);
 	} else {
 		server_update_idle(server, delta_time);
 	}

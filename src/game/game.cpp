@@ -24,7 +24,7 @@ enum class GameState {
 struct Game {
 	Arena persistent_arena;
 	Arena session_arena;
-	Arena transient_arena;
+	Arena frame_arena;
 
 	GameState state;
 	bool close_requested;
@@ -53,7 +53,7 @@ Game* game_init(Windowing::Context* window, char* ip_string, Arena* program_aren
 
 	arena_init(&game->persistent_arena, MEGABYTE);
 	arena_init(&game->session_arena, MEGABYTE);
-	arena_init(&game->transient_arena, MEGABYTE);
+	arena_init(&game->frame_arena, MEGABYTE);
 
 	game->state = GameState::Menu;
 	game->close_requested = false;
@@ -297,8 +297,9 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			return;
 		}
 
-		// NOW: This is a rat's nest. What should be here vs elsewhere and where
-		// should we introduce a nested function?
+		// NOW: This is a rat's nest.
+		// 1. Make it as clean as possible inline.
+		// 2. Decide whether anything currently inline should not be that.
 		if(game->local_server) {
 			Server* server = game->server;
 
@@ -321,7 +322,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 					});
 				}
 			}
-			server_update(server, BASE_FRAME_LENGTH, &game->transient_arena);
+			server_update(server, BASE_FRAME_LENGTH, &game->frame_arena);
 
 			if(server_is_active(server)) {
 				render_active_state(game, renderer, window);
@@ -338,7 +339,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 				client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
 				client->events_len++;
 			}
-			client_update(client, &game->transient_arena);
+			client_update(client, &game->frame_arena);
 
 			switch(client->connection_state) {
 				case CLIENT_STATE_REQUESTING_CONNECTION:
@@ -357,7 +358,7 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 	}
 
 	game->frames_since_init++;
-	arena_clear(&game->transient_arena);
+	arena_clear(&game->frame_arena);
 }
 
 bool game_close_requested(Game* game)
