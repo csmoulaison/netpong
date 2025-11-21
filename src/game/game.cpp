@@ -164,12 +164,10 @@ void render_waiting_to_start_state(Game* game, Render::Context* renderer, Window
 
 void render_active_state(Game* game, Render::Context* renderer, Windowing::Context* window)
 {
-	if(game->local_server) {
+	World* world;
+	if(game->local_server) { // Server is local.
 		Server* server = game->server;
-		World* world = &server->world;
-
-		game->visual_ball_position[0] = world->ball_position[0];
-		game->visual_ball_position[1] = world->ball_position[1];
+		world = &server->world;
 
 		for(u8 i = 0; i < 2; i++) {
 			ServerSlot* slot = &server->slots[i];
@@ -179,19 +177,16 @@ void render_active_state(Game* game, Render::Context* renderer, Windowing::Conte
 				game->visual_paddle_positions[i] = world->paddle_positions[i];
 			}
 		}
-	} else { // Server is remote
+	} else { // Server is remote.
 		Client* client = game->client;
-		World* world = &client_state_from_frame(client, client->frame - 1)->world;
-
-		//render_visual_lerp(&game->visual_ball_position[0], world->ball_position[0], client->frame_length * 4.0f);
-		//render_visual_lerp(&game->visual_ball_position[1], world->ball_position[1], client->frame_length * 4.0f);
-		game->visual_ball_position[0] = world->ball_position[0];
-		game->visual_ball_position[1] = world->ball_position[1];
+		world = &client_state_from_frame(client, client->frame - 1)->world;
 
 		i8 other_id = client_get_other_id(client);
 		render_visual_lerp(&game->visual_paddle_positions[other_id], world->paddle_positions[other_id], client->frame_length);
 		game->visual_paddle_positions[client->id] = world->paddle_positions[client->id];
 	}
+	game->visual_ball_position[0] = world->ball_position[0];
+	game->visual_ball_position[1] = world->ball_position[1];
 
 	// Render world
 	for(u8 i = 0; i < 2; i++) {
@@ -233,30 +228,31 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			0.0f, 1.0f,
 			1.0f, 1.0f, 1.0f, 1.0f,
 			FONT_FACE_LARGE);
+
 		const char* strings[MENU_OPTIONS_LEN] = { "Local", "Host", "Join", "Half bot", "Full bot", "Quit" };
 		for(u32 i = 0; i < MENU_OPTIONS_LEN; i++) {
+			float* activation = &game->menu_activations[i];
 			float activator_speed = 10.0f;
-			if(i == game->menu_selection) {
-				if(game->menu_activations[i] < 1.0f) {
-					game->menu_activations[i] += BASE_FRAME_LENGTH * activator_speed;
-					if(game->menu_activations[i] > 1.0f) {
-						game->menu_activations[i] = 1.0f;
-					}
+
+			// Animate text based on selection.
+			if(i == game->menu_selection && *activation < 1.0f) {
+				*activation += BASE_FRAME_LENGTH * activator_speed;
+				if(*activation > 1.0f) {
+					*activation = 1.0f;
 				}
-			} else {
-				if(game->menu_activations[i] > 0.0f) {
-					game->menu_activations[i] -= BASE_FRAME_LENGTH * activator_speed;
-					if(game->menu_activations[i] < 0.0f) {
-						game->menu_activations[i] = 0.0f;
-					}
+			} else if(i != game->menu_selection && *activation > 0.0f) {
+				*activation -= BASE_FRAME_LENGTH * activator_speed;
+				if(*activation < 0.0f) {
+					*activation = 0.0f;
 				}
 			}
+
 			Render::text_line(
 				renderer, 
 				strings[i], 
-				64.0f + (48.0f * game->menu_activations[i]), window->window_height - 200.0f - (96.0f * i), 
+				64.0f + (48.0f * *activation), window->window_height - 200.0f - (96.0f * i), 
 				0.0f, 1.0f,
-				1.0f, 1.0f, 1.0f - game->menu_activations[i], 1.0f,
+				1.0f, 1.0f, 1.0f - *activation, 1.0f,
 				FONT_FACE_SMALL);
 		}
 
@@ -273,6 +269,8 @@ void game_update(Game* game, Windowing::Context* window, Render::Context* render
 			game->close_requested = true;
 		}
 	} else {
+		// NOW: This is a rat's nest. What should be here vs elsewhere and where
+		// should we introduce a nested function?
 		if(game->local_server) {
 			Server* server = game->server;
 
