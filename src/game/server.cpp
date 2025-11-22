@@ -108,6 +108,8 @@ Server* server_init(Arena* session_arena, bool accept_client_connections)
 		server->connection_to_client_ids[i] = -1;
 	}
 
+	server->events_len = 0;
+
 	server_reset_game(server);
 	return server;
 }
@@ -349,8 +351,10 @@ void server_update_active(Server* server, f32 delta_time, Arena* frame_arena)
 				return;
 			}
 		} else { 
-			// Client is local or a bot. If the following assertion fires, it means
-			// inputs events were not pushed for this frame.
+			// Client is local or a bot.
+			//
+			// If the following assertion fires, it means inputs events were not pushed
+			// for this frame.
 			assert(client->inputs[effective_input_frame % INPUT_BUFFER_SIZE].frame == server->frame);
 		}
 

@@ -6,11 +6,6 @@
 #include "window/window.cpp"
 #include "renderer/renderer.cpp"
 
-#include "game/config.cpp"
-#include "game/world.cpp"
-#include "game/messages.cpp"
-#include "game/server.cpp"
-#include "game/client.cpp"
 #include "game/game.cpp"
 
 i32 main(i32 argc, char** argv)

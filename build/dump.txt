@@ -1,0 +1,19 @@
+mkdir: cannot create directory ‘../bin’: File exists
+In file included from ../src/game/game.cpp:24,
+                 from ../src/game/main.cpp:9:
+../src/game/session.cpp: In function ‘void session_update(Game*, Windowing::Context*, Render::Context*)’:
+../src/game/session.cpp:80:25: error: ‘game_render_active_state’ was not declared in this scope
+   80 |                         game_render_active_state(game, renderer, window);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~
+../src/game/session.cpp:82:25: error: ‘game_render_waiting_to_start_state’ was not declared in this scope
+   82 |                         game_render_waiting_to_start_state(game, renderer, window);
+      |                         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../src/game/session.cpp:98:33: error: ‘game_render_requesting_connection_state’ was not declared in this scope
+   98 |                                 game_render_requesting_connection_state(game, renderer, window);
+      |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../src/game/session.cpp:101:33: error: ‘game_render_waiting_to_start_state’ was not declared in this scope
+  101 |                                 game_render_waiting_to_start_state(game, renderer, window);
+      |                                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+../src/game/session.cpp:104:33: error: ‘game_render_active_state’ was not declared in this scope
+  104 |                                 game_render_active_state(game, renderer, window);
+      |                                 ^~~~~~~~~~~~~~~~~~~~~~~~
