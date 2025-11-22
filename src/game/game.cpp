@@ -25,7 +25,6 @@
 //
 //
 // WHETHER we want the following before moving to the next project is debatable:
-// 
 // - Most majorly, a task system with a thread pool, dependency graph, all that.
 //   I think it makes the most sense to do this in another project first before
 //   including it with a networked project.
@@ -35,6 +34,10 @@
 //   important. But do we want fun beeps? Maybe we want fun beeps.
 //   
 // - Advanced compression stuff for packets beyond just bitpacking.
+//
+// - Recorded sessions and replays.
+//
+// - Advanced tooling: debug visualizations/scrub through frames/other crazies.
 
 #include "game/config.cpp"
 #include "game/world.cpp"
