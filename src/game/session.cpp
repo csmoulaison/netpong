@@ -1,3 +1,9 @@
+#define SESSION_FULL_LOCAL 0
+#define SESSION_HALF_LOCAL 1
+#define SESSION_REMOTE 2
+#define SESSION_HALF_BOT 3
+#define SESSION_FULL_BOT 4
+
 void session_render_rect(Render::Context* renderer, Rect rect, Windowing::Context* window)
 {
 	Render::State* render_state = &renderer->current_state;
@@ -91,31 +97,31 @@ void session_render_active_state(Game* game, Render::Context* renderer, Windowin
 void session_init(Game* game, i32 config_setting) 
 {
 	switch(config_setting) {
-		case CONFIG_REMOTE:
-			game->local_server = false;
-			game->client = client_init(&game->session_arena, game->ip_string);
-			break;
-		case CONFIG_FULL_LOCAL:
+		case SESSION_FULL_LOCAL:
 			game->local_server = true;
 			game->server = server_init(&game->session_arena, false);
 			server_add_local_player(game->server);
 			server_add_local_player(game->server);
 			break;
-		case CONFIG_HALF_LOCAL:
+		case SESSION_HALF_LOCAL:
 			game->local_server = true;
 			game->server = server_init(&game->session_arena, true);
 			server_add_local_player(game->server);
 			break;
-		case CONFIG_FULL_BOT:
-			game->local_server = true;
-			game->server = server_init(&game->session_arena, true);
-			server_add_bot(game->server);
-			server_add_bot(game->server);
+		case SESSION_REMOTE:
+			game->local_server = false;
+			game->client = client_init(&game->session_arena, game->ip_string);
 			break;
-		case CONFIG_HALF_BOT:
+		case SESSION_HALF_BOT:
 			game->local_server = true;
 			game->server = server_init(&game->session_arena, true);
 			server_add_local_player(game->server);
+			server_add_bot(game->server);
+			break;
+		case SESSION_FULL_BOT:
+			game->local_server = true;
+			game->server = server_init(&game->session_arena, true);
+			server_add_bot(game->server);
 			server_add_bot(game->server);
 			break;
 		default: break;

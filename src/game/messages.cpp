@@ -11,7 +11,11 @@ enum MessageType {
 	SERVER_MESSAGE_SLOW_DOWN
 };
 
+// NOW: Change types to u8.
 
+// NOW: Deprecate all of the structs which are just types and nothing else.
+// The message sender shall just send the type as a naked value.
+ 
 // ClientRequestConnectionMessage 
 struct ClientRequestConnectionMessage {
 	u32 type;
@@ -57,8 +61,6 @@ struct ServerAcceptConnectionMessage {
 SerializeResult serialize_server_accept_connection(SerializeMode mode, ServerAcceptConnectionMessage* message, char* data, Arena* arena)
 {
 	Bitstream stream = bitstream_init(mode, data, arena);
-	//serialize_bits(&stream, (char*)message, sizeof(ServerWorldUpdateMessage) * 8);
-
 	serialize_u32(&stream, &message->type);
 	serialize_u8(&stream, &message->client_id);
 	return serialize_result(&stream);
@@ -91,7 +93,6 @@ SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpd
 	serialize_u32(&stream, &message->type);
 	serialize_i32(&stream, &message->frame);
 
-	// Eventually, the following becomes a serialize_world function, or something.
 	serialize_f32(&stream, &message->world.countdown_to_start);
 
 	serialize_f32(&stream, &message->world.ball_position[0]);
@@ -113,7 +114,7 @@ SerializeResult serialize_server_world_update(SerializeMode mode, ServerWorldUpd
 }
 
 
-// TODO: Add frame to these so the client can tell whether they have already
+// $TODO: Add frame to these so the client can tell whether they have already
 // responded to a more recent speed update message.
 // ServerSpeedUpMessage 
 struct ServerSpeedUpMessage {

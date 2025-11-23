@@ -5,7 +5,6 @@
 #include "network/network.cpp"
 #include "window/window.cpp"
 #include "renderer/renderer.cpp"
-
 #include "game/game.cpp"
 
 i32 main(i32 argc, char** argv)

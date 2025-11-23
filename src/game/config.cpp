@@ -1,13 +1,3 @@
-// $TODO: Determines the type of client server setup we have. Temporary until we
-// allow the user to switch between them at runtime.
-// UPDATE: Are we still using these, or?
-#define CONFIG_FULL_LOCAL 0
-#define CONFIG_HALF_LOCAL 1
-#define CONFIG_REMOTE 2
-#define CONFIG_HALF_BOT 3
-#define CONFIG_FULL_BOT 4
-#define CONFIG_SETTING CONFIG_HALF_LOCAL
-
 #define BASE_FRAME_LENGTH 0.01f
 
 #define START_COUNTDOWN_SECONDS 1.0f

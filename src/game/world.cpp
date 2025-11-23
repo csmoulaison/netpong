@@ -82,17 +82,14 @@ void world_simulate(World* world, f32 dt)
 	if(world->ball_velocity[0] > 0.0f) {
 		paddle_index = 1;
 	}
-
 	f32 paddle_x = -PADDLE_X + paddle_index * PADDLE_X * 2.0f;
 	f32 paddle_left = paddle_x - PADDLE_HALF_WIDTH;
 	f32 paddle_right = paddle_x + PADDLE_HALF_WIDTH;
 	f32 paddle_bottom = world->paddle_positions[paddle_index] - PADDLE_HEIGHT;
 	f32 paddle_top = world->paddle_positions[paddle_index] + PADDLE_HEIGHT;
 
-	if(ball_left < paddle_right && ball_right > paddle_left
-	&& ball_top > paddle_bottom && ball_bottom < paddle_top) {
-		if(ball_left - world->ball_velocity[0] > paddle_right
-		|| ball_right - world->ball_velocity[0] < paddle_left) {
+	if(ball_left < paddle_right && ball_right > paddle_left && ball_top > paddle_bottom && ball_bottom < paddle_top) {
+		if(ball_left - world->ball_velocity[0] > paddle_right || ball_right - world->ball_velocity[0] < paddle_left) {
 			world->ball_velocity[0] = -world->ball_velocity[0];
 			world->ball_position[0] += world->ball_velocity[0] * dt;
 		} else {
@@ -101,8 +98,7 @@ void world_simulate(World* world, f32 dt)
 		}
 	}
 
-	if(ball_bottom < -1.0f
-	|| ball_top > 1.0f) {
+	if(ball_bottom < -1.0f || ball_top > 1.0f) {
 		world->ball_velocity[1] = -world->ball_velocity[1];
 		world->ball_velocity[1] += world->ball_velocity[1] * dt;
 	}

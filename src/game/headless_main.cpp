@@ -23,6 +23,7 @@ i32 main(i32 argc, char** argv)
 
 	Server* server = server_init(&program_arena, true);
 
+	// TODO: Factor out common functionality between main and headless_main.
 	double time = 0.0f;
 	double delta_time = BASE_FRAME_LENGTH;
 

@@ -3,18 +3,18 @@
 //   after you're done.
 // 
 //   simulation/network stuff
+//   [X] world.cpp
+//   [X] messages.cpp
 //   [ ] client.cpp
 //   [ ] server.cpp
-//   [ ] world.cpp
-//   [ ] messages.cpp
 //   game stuff 
 //   [X] game.cpp
-//   [ ] session.cpp
-//   [ ] menu.cpp
+//   [X] session.cpp
+//   [X] menu.cpp
 //   // main/config stuff
-//   [ ] headless_main.cpp
-//   [ ] main.cpp
-//   [ ] config.cpp
+//   [X] headless_main.cpp
+//   [X] main.cpp
+//   [X] config.cpp
 //   core stuff 
 //   [ ] networking
 //   [ ] rendering
