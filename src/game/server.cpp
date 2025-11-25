@@ -216,6 +216,7 @@ void server_handle_client_input_message(Server* server, i32 client_id, ClientInp
 	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
 	for(i32 i = 0; i <= frame_delta; i++) {
 		i32 input_frame = client_input->latest_frame - frame_delta + i;
+
 		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
 		if(buffer_input->frame == input_frame) {
 			continue;
@@ -223,6 +224,7 @@ void server_handle_client_input_message(Server* server, i32 client_id, ClientInp
 
 		ClientInput event_input;
 		event_input.frame = input_frame;
+
 		if(client_input->input_moves_up[i]) {
 			event_input.input.move_up = 1.0f;
 		} else {
@@ -234,7 +236,7 @@ void server_handle_client_input_message(Server* server, i32 client_id, ClientInp
 			event_input.input.move_down = 0.0f;
 		}
 
-		server_push_event(server, (ServerEvent){ 
+		server_push_event(server, (ServerEvent) { 
 			.type = SERVER_EVENT_CLIENT_INPUT, 
 			.client_id = client_id,
 			.client_input = event_input

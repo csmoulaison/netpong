@@ -152,6 +152,7 @@ void client_simulate_and_advance_frame(Client* client, Arena* frame_arena)
 	} else {
 		world->player_inputs[client->id].move_down = 0.0f;
 	}
+
 	client_simulate_frame(world, client);
 
 	ClientInputMessage input_message = {};
@@ -180,7 +181,6 @@ void client_simulate_and_advance_frame(Client* client, Arena* frame_arena)
 	client->frame++;
 }
 
-// Message handling functions
 void client_handle_world_update(Client* client, ClientWorldState* server_state, Arena* frame_arena)
 {
 	if(client->connection_state != CLIENT_STATE_ACTIVE) {
@@ -233,68 +233,6 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 	}
 }
 
-// Our request to connect has been accepted by the server, so we store our
-// newly received client id and switch to the WAITING_TO_START state.
-// 
-// In this state, we will continually send back a counter acknowledgement so the
-// server knows we are ready. This happens in the client update loop.
-void client_handle_accept_connection(Client* client, i32 client_id)
-{
-	if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
-		client->id = client_id;
-		client->connection_state = CLIENT_STATE_WAITING_TO_START;
-
-		printf("Client: Recieved connection acceptance from server.\n");
-	}
-}
-
-void client_handle_end_game(Client* client)
-{
-	client->connection_state = CLIENT_STATE_WAITING_TO_START;
-	client_reset_game(client);
-
-	printf("Received end game notice from server.\n");
-}
-
-void client_handle_disconnect(Client* client)
-{
-	client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
-	client->id = -1;
-	client_reset_game(client);
-	
-	printf("Received disconnect notice from server.\n");
-}
-
-void client_handle_speed_up(Client* client)
-{
-	client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
-}
-
-void client_handle_slow_down(Client* client)
-{
-	client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
-}
-
-void client_update_requesting_connection(Client* client)
-{
-	ClientRequestConnectionMessage request_message;
-	request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
-	Network::send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
-}
-
-void client_update_waiting_to_start(Client* client)
-{
-	ClientReadyToStartMessage ready_message;
-	ready_message.type = CLIENT_MESSAGE_READY_TO_START;
-	Network::send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
-
-}
-
-void client_update_active(Client* client, Arena* frame_arena)
-{
-	client_simulate_and_advance_frame(client, frame_arena);
-}
-
 void client_process_packets(Client* client, Arena* frame_arena)
 {
 	Network::Packet* packet = Network::receive_packets(client->socket, frame_arena);
@@ -303,47 +241,35 @@ void client_process_packets(Client* client, Arena* frame_arena)
 		u32 type = *(u32*)packet->data;
 		void* data = packet->data;
 
-		ServerWorldUpdateMessage world_update_message;
-		ServerAcceptConnectionMessage accept_connection_message;
 
 		// Variables used in the switch statement.
 		ClientWorldState update_state;
+		ServerWorldUpdateMessage world_update_message;
+		ServerAcceptConnectionMessage accept_connection_message;
 
+		assert(client != nullptr);
 		switch(type) {
-			case SERVER_MESSAGE_WORLD_UPDATE:
-				serialize_server_world_update(SerializeMode::Read, &world_update_message, (char*)data, nullptr);
-		
-				assert(client != nullptr);
-				update_state.world = world_update_message.world;
-				update_state.frame = world_update_message.frame;
-				client_push_event(client, (ClientEvent){ 
-					.type = CLIENT_EVENT_WORLD_UPDATE, 
-					.world_update = update_state 
-				}); 
-				break;
 			case SERVER_MESSAGE_ACCEPT_CONNECTION:
 				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, (char*)data, nullptr);
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ 
-					.type = CLIENT_EVENT_CONNECTION_ACCEPTED, 
-					.assigned_id = accept_connection_message.client_id 
-				});
+				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_CONNECTION_ACCEPTED, .assigned_id = accept_connection_message.client_id });
 				break;
 			case SERVER_MESSAGE_END_GAME:
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_END_GAME }); 
+				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_END_GAME }); 
 				break;
 			case SERVER_MESSAGE_DISCONNECT:
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_DISCONNECT }); 
+				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_DISCONNECT }); 
+				break;
+			case SERVER_MESSAGE_WORLD_UPDATE:
+				serialize_server_world_update(SerializeMode::Read, &world_update_message, (char*)data, nullptr);
+				update_state.world = world_update_message.world;
+				update_state.frame = world_update_message.frame;
+				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_WORLD_UPDATE, .world_update = update_state }); 
 				break;
 			case SERVER_MESSAGE_SPEED_UP:
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SPEED_UP }); 
+				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_SPEED_UP }); 
 				break;
 			case SERVER_MESSAGE_SLOW_DOWN:
-				assert(client != nullptr);
-				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_SLOW_DOWN }); 
+				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_SLOW_DOWN }); 
 				break;
 			default: break;
 		}
@@ -355,32 +281,46 @@ void client_process_events(Client* client, Arena* frame_arena)
 {
 	client->move_up = false;
 	client->move_down = false;
+
 	for(u32 i = 0; i < client->events_len; i++) {
 		ClientEvent* event = &client->events[i];
 		switch(event->type) {
+			case CLIENT_EVENT_CONNECTION_ACCEPTED:
+				if(client->connection_state == CLIENT_STATE_REQUESTING_CONNECTION) {
+					client->connection_state = CLIENT_STATE_WAITING_TO_START;
+					client->id = event->assigned_id;
+					printf("Client: Recieved connection acceptance from server.\n");
+				}
+				break;
+			case CLIENT_EVENT_END_GAME:
+				if(client->connection_state == CLIENT_STATE_ACTIVE) {
+					client->connection_state = CLIENT_STATE_WAITING_TO_START;
+					client_reset_game(client);
+					printf("Received end game notice from server.\n");
+				}
+				break;
+			case CLIENT_EVENT_DISCONNECT:
+				if(client->connection_state != CLIENT_STATE_REQUESTING_CONNECTION) {
+					client->connection_state = CLIENT_STATE_REQUESTING_CONNECTION;
+					client->id = -1;
+					client_reset_game(client);
+					printf("Received disconnect notice from server.\n");
+				}
+				break;
+			case CLIENT_EVENT_WORLD_UPDATE:
+				client_handle_world_update(client, &event->world_update, frame_arena); 
+				break;
 			case CLIENT_EVENT_INPUT_MOVE_UP:
 				client->move_up = true; 
 				break;
 			case CLIENT_EVENT_INPUT_MOVE_DOWN:
 				client->move_down = true; 
 				break;
-			case CLIENT_EVENT_WORLD_UPDATE:
-				client_handle_world_update(client, &event->world_update, frame_arena); 
-				break;
-			case CLIENT_EVENT_CONNECTION_ACCEPTED:
-				client_handle_accept_connection(client, event->assigned_id); 
-				break;
-			case CLIENT_EVENT_END_GAME:
-				client_handle_end_game(client); 
-				break;
-			case CLIENT_EVENT_DISCONNECT:
-				client_handle_disconnect(client); 
-				break;
 			case CLIENT_EVENT_SPEED_UP:
-				client_handle_speed_up(client); 
+				client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			case CLIENT_EVENT_SLOW_DOWN:
-				client_handle_slow_down(client); 
+				client->frame_length = BASE_FRAME_LENGTH + (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 				break;
 			default: break;
 		}
@@ -399,16 +339,22 @@ void client_update(Client* client, Arena* frame_arena)
 	// network tick.
 	Network::update_sim_mode(client->socket, client->frame_length);
 #endif
-	
+
+	// Used in switch statement
+	ClientRequestConnectionMessage request_message;
+	ClientReadyToStartMessage ready_message;
+
 	switch(client->connection_state) {
 		case CLIENT_STATE_REQUESTING_CONNECTION:
-			client_update_requesting_connection(client);
+			request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
+			Network::send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
 			break;
 		case CLIENT_STATE_WAITING_TO_START:
-			client_update_waiting_to_start(client);
+			ready_message.type = CLIENT_MESSAGE_READY_TO_START;
+			Network::send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
 			break;
 		case CLIENT_STATE_ACTIVE:
-			client_update_active(client, frame_arena);
+			client_simulate_and_advance_frame(client, frame_arena);
 			break;
 		default: break;
 	}

@@ -26,26 +26,16 @@ void session_render_visual_lerp(f32* visual, f32 real, f32 dt)
 	}
 }
 
-void session_render_requesting_connection_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
+void session_render_wait_text(const char* string, Game* game, Render::Context* renderer, Windowing::Context* window)
 {
 	Render::text_line(
 		renderer, 
-		"Attempting to connect...", 
+		string,
 		64.0f, window->window_height - 64.0f, 
 		0.0f, 1.0f,
 		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
-		FONT_FACE_SMALL);
-}
-
-void session_render_waiting_to_start_state(Game* game, Render::Context* renderer, Windowing::Context* window) 
-{
-	Render::text_line(
-		renderer, 
-		"Waiting to start...", 
-		64.0f, window->window_height - 64.0f, 
-		0.0f, 1.0f,
-		1.0f, 1.0f, 1.0f, sin((float)game->frames_since_init * 0.05f),
-		FONT_FACE_SMALL);
+		FONT_FACE_SMALL
+	);
 }
 
 void session_render_active_state(Game* game, Render::Context* renderer, Windowing::Context* window)
@@ -150,27 +140,26 @@ void session_update(Game* game, Windowing::Context* window, Render::Context* ren
 		return;
 	}
 
-	// NOW: This is a rat's nest.
-	// 1. Make it as clean as possible inline.
-	// 2. Decide whether anything currently inline should not be that.
 	if(game->local_server) {
 		Server* server = game->server;
 
 		for(u8 i = 0; i < 2; i++) {
 			if(server->slots[i].type == SERVER_PLAYER_LOCAL) {
-				ServerEvent event = {};
-				event.type = SERVER_EVENT_CLIENT_INPUT;
-				event.client_id = i;
+				ClientInput event_input = {};
+				event_input.frame = server->frame;
 
-				event.client_input.frame = server->frame;
 				if(Windowing::button_down(window, game->move_up_buttons[i])) {
-					event.client_input.input.move_up = 1.0f;
+					event_input.input.move_up = 1.0f;
 				}
 				if(Windowing::button_down(window, game->move_down_buttons[i])) {
-					event.client_input.input.move_down = 1.0f;
+					event_input.input.move_down = 1.0f;
 				}
 
-				server_push_event(server, event);
+				server_push_event(server, (ServerEvent) {
+					.type = SERVER_EVENT_CLIENT_INPUT,
+					.client_id = i,
+					.client_input = event_input
+				});
 			}
 		}
 
@@ -179,26 +168,26 @@ void session_update(Game* game, Windowing::Context* window, Render::Context* ren
 		if(server_is_active(server)) {
 			session_render_active_state(game, renderer, window);
 		} else {
-			session_render_waiting_to_start_state(game, renderer, window);
+			session_render_wait_text("Waiting to start...", game, renderer, window);
 		}
-	} else { // Server is remote.
+	} else if(!game->local_server) {
 		Client* client = game->client;
+
 		if(Windowing::button_down(window, game->move_up_buttons[0])) {
-			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_UP;
-			client->events_len++;
+			client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_INPUT_MOVE_UP });
 		}
 		if(Windowing::button_down(window, game->move_down_buttons[0])) {
-			client->events[client->events_len].type = CLIENT_EVENT_INPUT_MOVE_DOWN;
-			client->events_len++;
+			client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_INPUT_MOVE_DOWN });
 		}
+
 		client_update(client, &game->frame_arena);
 
 		switch(client->connection_state) {
 			case CLIENT_STATE_REQUESTING_CONNECTION:
-				session_render_requesting_connection_state(game, renderer, window);
+				session_render_wait_text("Attempting to connect...", game, renderer, window);
 				break;
 			case CLIENT_STATE_WAITING_TO_START:
-				session_render_waiting_to_start_state(game, renderer, window);
+				session_render_wait_text("Waiting to start...", game, renderer, window);
 				break;
 			case CLIENT_STATE_ACTIVE:
 				session_render_active_state(game, renderer, window);

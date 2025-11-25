@@ -16,6 +16,12 @@ enum MessageType {
 // NOW: Deprecate all of the structs which are just types and nothing else.
 // The message sender shall just send the type as a naked value.
  
+// NOW: Use the following function to send these packets in one line.
+void send_naked_network_packet(u8 type, Network::Socket* socket)
+{
+	Network::send_packet(socket, 0, &type, sizeof(type));
+}
+ 
 // ClientRequestConnectionMessage 
 struct ClientRequestConnectionMessage {
 	u32 type;
