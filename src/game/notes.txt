@@ -1,0 +1,13 @@
+11/24/2025, DEBUG RUN NOTES:
+	Windowing::init_pre_graphics()
+		- initialize xlib window and input stuff
+	
+	Render::init()
+		- initialize opengl and load fonts
+
+	game_init()
+		- allocate arenas
+		- initialize game state and set to menu
+		- register button keys
+		- store or default ip_string
+		- initialize menus

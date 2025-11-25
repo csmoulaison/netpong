@@ -23,7 +23,6 @@ i32 main(i32 argc, char** argv)
 	}
 	game = game_init(window, ip_string, &program_arena);
 
-	double time = 0.0f;
 	double current_time = Time::seconds();
 	double time_accumulator = 0.0f;
 	double frame_length = BASE_FRAME_LENGTH;
@@ -50,7 +49,6 @@ i32 main(i32 argc, char** argv)
 			game_update(game, window, renderer);
 
 			time_accumulator -= frame_length;
-			time += frame_length;
 		}
 
 		// Render based on render states now.
