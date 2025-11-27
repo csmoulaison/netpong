@@ -185,6 +185,7 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 {
 	if(client->connection_state != CLIENT_STATE_ACTIVE) {
 		client->connection_state = CLIENT_STATE_ACTIVE;
+		// NOW: Remove magic number 6.
 		for(i8 i = 0; i < 6; i++) {
 			client_simulate_and_advance_frame(client, frame_arena);
 		}
@@ -192,20 +193,23 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 	}
 
 	i32 update_frame = server_state->frame;
-	ClientWorldState* update_state = client_state_from_frame(client, update_frame);
+	ClientWorldState* client_update_state = client_state_from_frame(client, update_frame);
 
-	if(update_state->frame != update_frame) {
-		assert(update_frame - client->frame < 100);
+	// If the update frame has not been previously simulated by the client, we
+	// simulate up to that point. We want to avoid this happening in general, as
+	// it means the client has fallen behind the server.
+	if(client_update_state->frame != update_frame) {
+		strict_assert(update_frame - client->frame < 100);
 
 		client->frame_length = BASE_FRAME_LENGTH - (BASE_FRAME_LENGTH * FRAME_LENGTH_MOD);
 		while(client->frame < update_frame + 1) {
 			client_simulate_and_advance_frame(client, frame_arena);
-			//printf("Client: Behind server (%i-%i), simulating catch up frame.\n", update_frame, client->frame);
+			printf("Client: Behind server (%i-%i), simulating catch up frame.\n", update_frame, client->frame);
 		}
-		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", update_state->frame, update_frame);
+		printf("\033[31mClient fell behind server! client %u, server %u\033[0m\n", client_update_state->frame, update_frame);
 	}
 
-	World* client_world = &update_state->world;
+	World* client_world = &client_update_state->world;
 	World* server_world = &server_state->world;
 
 	// If the states are equal, client side prediction was successful and we do not
@@ -217,12 +221,14 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 		return;
 	}
 
+	// Resimulate from the update frame received from the server up until our most
+	// current client frame.
 	assert(client->frame - update_frame >= 0);
 	memcpy(client_world, server_world, sizeof(World));
 
-	for(i32 i = update_frame + 1; i <= client->frame; i++) {
-		World* previous_world = &client_state_from_frame(client, i - 1)->world;
-		World* current_world = &client_state_from_frame(client, i)->world;
+	for(i32 i = update_frame; i < client->frame; i++) {
+		World* previous_world = &client_state_from_frame(client, i)->world;
+		World* current_world = &client_state_from_frame(client, i + 1)->world;
 
 		PlayerInput cached_player_input = current_world->player_inputs[client->id];
 		memcpy(current_world, previous_world, sizeof(World));
@@ -240,7 +246,6 @@ void client_process_packets(Client* client, Arena* frame_arena)
 	while(packet != nullptr) {
 		u32 type = *(u32*)packet->data;
 		void* data = packet->data;
-
 
 		// Variables used in the switch statement.
 		ClientWorldState update_state;
