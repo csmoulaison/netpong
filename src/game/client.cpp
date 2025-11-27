@@ -104,7 +104,11 @@ Client* client_init(Arena* session_arena, char* ip_string)
 	return client;
 }
 
-// Frame simulation functions
+// NOW: The names of client_simulate_frame and client_simulate_and_advance_frame
+// are not particularly evocative of what they are used for in context, so we
+// should come up with a good description of them based on their usage and see
+// if there's a better name we can come up with.
+
 void client_simulate_frame(World* world, Client* client)
 {
 	// $TODO: This is kind of a big huge thing I missed. The frame_length is being
@@ -120,6 +124,7 @@ void client_simulate_frame(World* world, Client* client)
 	world_simulate(world, client->frame_length);
 
 	i8 other_id = client_get_other_id(client);
+
 	world->player_inputs[other_id].move_up -= INPUT_ATTENUATION_SPEED * client->frame_length;
 	if(world->player_inputs[other_id].move_up < 0.0f) {
 		world->player_inputs[other_id].move_up == 0.0f;
@@ -132,15 +137,15 @@ void client_simulate_frame(World* world, Client* client)
 
 void client_simulate_and_advance_frame(Client* client, Arena* frame_arena)
 {
-	ClientWorldState* previous_state = client_state_from_frame(client, client->frame - 1);
+	// Copy previous frame if it exists, update input, and simulate.
 	ClientWorldState* current_state = client_state_from_frame(client, client->frame);
-
-	if(client->frame > 0) {
-		memcpy(&current_state->world, &previous_state->world, sizeof(World));
-	}
-
 	current_state->frame = client->frame;
 	World* world = &current_state->world;
+
+	if(client->frame > 0) {
+		ClientWorldState* previous_state = client_state_from_frame(client, client->frame - 1);
+		memcpy(world, &previous_state->world, sizeof(World));
+	}
 
 	if(client->move_up) {
 		world->player_inputs[client->id].move_up = 1.0f;
@@ -155,6 +160,7 @@ void client_simulate_and_advance_frame(Client* client, Arena* frame_arena)
 
 	client_simulate_frame(world, client);
 
+	// Send rolling window of client inputs to the server.
 	ClientInputMessage input_message = {};
 	input_message.type = CLIENT_MESSAGE_INPUT;
 	input_message.latest_frame = client->frame;
