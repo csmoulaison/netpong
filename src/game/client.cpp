@@ -232,9 +232,7 @@ void client_handle_world_update(Client* client, ClientWorldState* server_state, 
 
 		PlayerInput cached_player_input = current_world->player_inputs[client->id];
 		memcpy(current_world, previous_world, sizeof(World));
-
 		current_world->player_inputs[client->id] = cached_player_input;
-
 		client_simulate_frame(current_world, client);
 	}
 }
