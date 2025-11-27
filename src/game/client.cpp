@@ -251,29 +251,30 @@ void client_process_packets(Client* client, Arena* frame_arena)
 		u32 type = *(u32*)packet->data;
 		void* data = packet->data;
 
-		// Variables used in the switch statement.
-		ClientWorldState update_state;
-		ServerWorldUpdateMessage world_update_message;
-		ServerAcceptConnectionMessage accept_connection_message;
-
 		assert(client != nullptr);
 		switch(type) {
-			case SERVER_MESSAGE_ACCEPT_CONNECTION:
+			case SERVER_MESSAGE_ACCEPT_CONNECTION: {
+				ServerAcceptConnectionMessage accept_connection_message;
 				serialize_server_accept_connection(SerializeMode::Read, &accept_connection_message, (char*)data, nullptr);
 				client_push_event(client, (ClientEvent){ .type = CLIENT_EVENT_CONNECTION_ACCEPTED, .assigned_id = accept_connection_message.client_id });
 				break;
+			}
 			case SERVER_MESSAGE_END_GAME:
 				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_END_GAME }); 
 				break;
 			case SERVER_MESSAGE_DISCONNECT:
 				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_DISCONNECT }); 
 				break;
-			case SERVER_MESSAGE_WORLD_UPDATE:
+			case SERVER_MESSAGE_WORLD_UPDATE: {
+				ServerWorldUpdateMessage world_update_message;
 				serialize_server_world_update(SerializeMode::Read, &world_update_message, (char*)data, nullptr);
+
+				ClientWorldState update_state;
 				update_state.world = world_update_message.world;
 				update_state.frame = world_update_message.frame;
 				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_WORLD_UPDATE, .world_update = update_state }); 
 				break;
+			}
 			case SERVER_MESSAGE_SPEED_UP:
 				client_push_event(client, (ClientEvent) { .type = CLIENT_EVENT_SPEED_UP }); 
 				break;
@@ -349,19 +350,19 @@ void client_update(Client* client, Arena* frame_arena)
 	Network::update_sim_mode(client->socket, client->frame_length);
 #endif
 
-	// Used in switch statement
-	ClientRequestConnectionMessage request_message;
-	ClientReadyToStartMessage ready_message;
-
 	switch(client->connection_state) {
-		case CLIENT_STATE_REQUESTING_CONNECTION:
+		case CLIENT_STATE_REQUESTING_CONNECTION: {
+			ClientRequestConnectionMessage request_message;
 			request_message.type = CLIENT_MESSAGE_REQUEST_CONNECTION;
 			Network::send_packet(client->socket, 0, (void*)&request_message, sizeof(request_message));
 			break;
-		case CLIENT_STATE_WAITING_TO_START:
+		}
+		case CLIENT_STATE_WAITING_TO_START: {
+			ClientReadyToStartMessage ready_message;
 			ready_message.type = CLIENT_MESSAGE_READY_TO_START;
 			Network::send_packet(client->socket, 0, &ready_message, sizeof(ready_message));
 			break;
+		}
 		case CLIENT_STATE_ACTIVE:
 			client_simulate_and_advance_frame(client, frame_arena);
 			break;
