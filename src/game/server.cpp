@@ -192,58 +192,6 @@ reject_connection_request:
 	printf("Server: A client requested a connection (connection %u), but the game is full.\n", connection_id);
 }
 
-// Sets clients to the ACTIVE state in response to join acknowledgement packets,
-// which are sent to us in response to acceptance packets we sent when handling
-// connection requests.
-// Once both slots are in the ACTIVE state, the server update function
-// will use the active game codepath.
-void server_handle_client_ready(Server* server, i32 client_id)
-{
-	ServerSlot* client = &server->slots[client_id];
-	if(client->state == SERVER_SLOT_PENDING) {
-		client->state = SERVER_SLOT_ACTIVE;
-		printf("Server: Received client acknowledgement, setting client connected: %d\n", client_id);
-	}
-	client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
-}
-
-// Stores newly recieved input in the relevant client's input buffer. These
-// buffered inputs are pulled from once every frame in the server active update
-// function.
-void server_handle_client_input_message(Server* server, i32 client_id, ClientInputMessage* client_input)
-{
-	ServerSlot* client = &server->slots[client_id];
-	i32 frame_delta = client_input->latest_frame - client_input->oldest_frame;
-	for(i32 i = 0; i <= frame_delta; i++) {
-		i32 input_frame = client_input->latest_frame - frame_delta + i;
-
-		ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
-		if(buffer_input->frame == input_frame) {
-			continue;
-		}
-
-		ClientInput event_input;
-		event_input.frame = input_frame;
-
-		if(client_input->input_moves_up[i]) {
-			event_input.input.move_up = 1.0f;
-		} else {
-			event_input.input.move_up = 0.0f;
-		}
-		if(client_input->input_moves_down[i]) {
-			event_input.input.move_down = 1.0f;
-		} else {
-			event_input.input.move_down = 0.0f;
-		}
-
-		server_push_event(server, (ServerEvent) { 
-			.type = SERVER_EVENT_CLIENT_INPUT, 
-			.client_id = client_id,
-			.client_input = event_input
-		});
-	}
-}
-
 void server_handle_client_input(Server* server, i32 client_id, ClientInput* client_input) 
 {
 	ServerSlot* client = &server->slots[client_id];
@@ -403,8 +351,6 @@ void server_process_packets(Server* server, Arena* frame_arena)
 			client_id = server->connection_to_client_ids[packet->connection_id];
 		}
 
-		ClientInputMessage input_message;
-
 		switch(type) {
 			case CLIENT_MESSAGE_REQUEST_CONNECTION:
 				assert(server != nullptr);
@@ -421,15 +367,46 @@ void server_process_packets(Server* server, Arena* frame_arena)
 
 				server_push_event(server, (ServerEvent){ .type = SERVER_EVENT_CLIENT_READY_TO_START, .client_id = client_id });
 				break;
-			case CLIENT_MESSAGE_INPUT:
+			case CLIENT_MESSAGE_INPUT: {
 				assert(server != nullptr);
 				assert(client_id != -1);
 				assert(client_id < 2);
 
+				ClientInputMessage input_message;
 				serialize_client_input(SerializeMode::Read, &input_message, (char*)data, nullptr);
 
-				server_handle_client_input_message(server, client_id, (ClientInputMessage*)&input_message);
+				ServerSlot* client = &server->slots[client_id];
+				i32 frame_delta = input_message.latest_frame - input_message.oldest_frame;
+				for(i32 i = 0; i <= frame_delta; i++) {
+					i32 input_frame = input_message.latest_frame - frame_delta + i;
+
+					ClientInput* buffer_input = &client->inputs[input_frame % INPUT_BUFFER_SIZE];
+					if(buffer_input->frame == input_frame) {
+						continue;
+					}
+
+					ClientInput event_input;
+					event_input.frame = input_frame;
+
+					if(input_message.input_moves_up[i]) {
+						event_input.input.move_up = 1.0f;
+					} else {
+						event_input.input.move_up = 0.0f;
+					}
+					if(input_message.input_moves_down[i]) {
+						event_input.input.move_down = 1.0f;
+					} else {
+						event_input.input.move_down = 0.0f;
+					}
+
+					server_push_event(server, (ServerEvent) { 
+						.type = SERVER_EVENT_CLIENT_INPUT, 
+						.client_id = client_id,
+						.client_input = event_input
+					});
+				}
 				break;
+			}
 			default: break;
 		}
 		packet = packet->next;
@@ -444,9 +421,15 @@ void server_process_events(Server* server, Arena* frame_arena)
 			case SERVER_EVENT_CONNECTION_REQUEST:
 				server_handle_connection_request(server, event->connection_id, frame_arena);
 				break;
-			case SERVER_EVENT_CLIENT_READY_TO_START:
-				server_handle_client_ready(server, event->client_id);
+			case SERVER_EVENT_CLIENT_READY_TO_START: {
+				ServerSlot* client = &server->slots[event->client_id];
+				if(client->state == SERVER_SLOT_PENDING) {
+					client->state = SERVER_SLOT_ACTIVE;
+					printf("Server: Received client acknowledgement, setting client connected: %d\n", event->client_id);
+				}
+				client->ready_timeout_countdown = READY_TIMEOUT_LENGTH;
 				break;
+			}
 			case SERVER_EVENT_CLIENT_INPUT:
 				server_handle_client_input(server, event->client_id, &event->client_input); 
 				break;
